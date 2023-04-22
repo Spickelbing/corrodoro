@@ -1,6 +1,4 @@
-use crate::args::{Args, Parser};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use crate::args::{Args, Parser, SessionDuration};
 
 mod args;
 
@@ -8,11 +6,9 @@ fn main() {
     let args = Args::parse();
 
     match args.command {
-        args::Command::Local {
-            work,
-            short,
-            long,
-        } => println!("work: {work}, short: {short}, long: {long}"),
+        args::Command::Local { work, short, long } => {
+            println!("work: {work}, short: {short}, long: {long}")
+        }
         _ => todo!(),
     }
 }

@@ -50,11 +50,29 @@ impl Deref for SessionDuration {
 }
 
 #[derive(Debug)]
-pub struct ParseSessionDurationError;
+pub enum ParseSessionDurationError {
+    InvalidFormat,
+    TooManySeconds,
+    SecondsNotTwoDigits,
+    ParseIntError(std::num::ParseIntError),
+}
 
 impl Display for ParseSessionDurationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "invalid session duration")
+        match self {
+            ParseSessionDurationError::InvalidFormat => {
+                write!(f, "expected \"minutes\" or \"minutes:seconds\"")
+            }
+            ParseSessionDurationError::TooManySeconds => {
+                write!(f, "seconds must be less than 60")
+            }
+            ParseSessionDurationError::ParseIntError(e) => {
+                write!(f, "failed to parse integer: {}", e)
+            }
+            ParseSessionDurationError::SecondsNotTwoDigits => {
+                write!(f, "seconds must be two digits")
+            }
+        }
     }
 }
 
@@ -65,19 +83,25 @@ impl FromStr for SessionDuration {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let v: Vec<&str> = s.split(':').collect();
-        let minutes = v[0].parse::<u64>().map_err(|_| ParseSessionDurationError)?;
+        let minutes = v[0]
+            .parse::<u64>()
+            .map_err(|e| ParseSessionDurationError::ParseIntError(e))?;
 
         match v.len() {
             1 => Ok(SessionDuration(Duration::from_secs(minutes * 60))),
             2 => {
-                let seconds = v[1].parse::<u64>().map_err(|_| ParseSessionDurationError)?;
+                let seconds = v[1]
+                    .parse::<u64>()
+                    .map_err(|e| ParseSessionDurationError::ParseIntError(e))?;
                 if seconds > 59 {
-                    Err(ParseSessionDurationError)
-                } else {
-                    Ok(SessionDuration(Duration::from_secs(minutes * 60 + seconds)))
+                    return Err(ParseSessionDurationError::TooManySeconds);
+                } else if v[1].len() != 2 {
+                    return Err(ParseSessionDurationError::SecondsNotTwoDigits);
                 }
+
+                Ok(SessionDuration(Duration::from_secs(minutes * 60 + seconds)))
             }
-            _ => Err(ParseSessionDurationError),
+            _ => Err(ParseSessionDurationError::InvalidFormat),
         }
     }
 }
