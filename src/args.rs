@@ -67,7 +67,7 @@ impl Display for ParseSessionDurationError {
                 write!(f, "seconds must be less than 60")
             }
             ParseSessionDurationError::ParseIntError(e) => {
-                write!(f, "failed to parse integer: {}", e)
+                write!(f, "failed to parse integer: {e}")
             }
             ParseSessionDurationError::SecondsNotTwoDigits => {
                 write!(f, "seconds must be two digits")
@@ -85,14 +85,14 @@ impl FromStr for SessionDuration {
         let v: Vec<&str> = s.split(':').collect();
         let minutes = v[0]
             .parse::<u64>()
-            .map_err(|e| ParseSessionDurationError::ParseIntError(e))?;
+            .map_err(ParseSessionDurationError::ParseIntError)?;
 
         match v.len() {
             1 => Ok(SessionDuration(Duration::from_secs(minutes * 60))),
             2 => {
                 let seconds = v[1]
                     .parse::<u64>()
-                    .map_err(|e| ParseSessionDurationError::ParseIntError(e))?;
+                    .map_err(ParseSessionDurationError::ParseIntError)?;
                 if seconds > 59 {
                     return Err(ParseSessionDurationError::TooManySeconds);
                 } else if v[1].len() != 2 {
@@ -110,6 +110,6 @@ impl Display for SessionDuration {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let minutes = self.0.as_secs() / 60;
         let seconds = self.0.as_secs() % 60;
-        write!(f, "{}:{:02}", minutes, seconds)
+        write!(f, "{minutes}:{seconds:02}")
     }
 }
