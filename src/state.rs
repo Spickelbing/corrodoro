@@ -2,21 +2,22 @@ use crate::args::SessionDuration;
 use std::fmt::Display;
 use std::time::Duration;
 
-pub struct State {
+#[derive(Clone)]
+pub struct PomodoroState {
     activity: Activity,
     progress: SessionDuration,
     num_activity: u32,
-    pub is_stopped: bool,
+    pub timer_is_stopped: bool,
     settings: Settings,
 }
 
-impl State {
-    pub fn new(settings: Settings) -> State {
-        State {
+impl PomodoroState {
+    pub fn new(settings: Settings) -> PomodoroState {
+        PomodoroState {
             activity: Activity::Focus,
             progress: SessionDuration(Duration::from_secs(0)),
             num_activity: 0,
-            is_stopped: !settings.start_automatically,
+            timer_is_stopped: !settings.start_automatically,
             settings,
         }
     }
@@ -46,20 +47,28 @@ impl State {
             }
         }
     }
+
+    pub fn handle_event(&mut self, event : Event) {
+        match event {
+            Event::Pause => self.timer_is_stopped = true,
+            Event::Resume => self.timer_is_stopped = false,
+        }
+    }
 }
 
-impl Display for State {
+impl Display for PomodoroState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{} {} {}",
             self.activity,
             self.progress,
-            if self.is_stopped { "||" } else { "" }
+            if self.timer_is_stopped { "||" } else { "" }
         )
     }
 }
 
+#[derive(Clone)]
 pub enum Activity {
     Focus,
     ShortBreak,
@@ -76,6 +85,7 @@ impl Display for Activity {
     }
 }
 
+#[derive(Clone)]
 pub struct Settings {
     pub focus_duration: SessionDuration,
     pub short_break_duration: SessionDuration,
@@ -83,12 +93,7 @@ pub struct Settings {
     pub start_automatically: bool,
 }
 
-pub enum Message {
-    Start,
-    Stop,
-    Reset,
-    Skip,
-    //Quit,
-    IncreaseProgress(SessionDuration),
-    DecreaseProgress(SessionDuration),
+pub enum Event {
+    Pause,
+    Resume,
 }
