@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
+use std::ops::DerefMut;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -39,13 +40,19 @@ pub enum Command {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct SessionDuration(Duration);
+pub struct SessionDuration(pub Duration);
 
 impl Deref for SessionDuration {
     type Target = Duration;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for SessionDuration {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
