@@ -48,7 +48,17 @@ impl PomodoroState {
         }
     }
 
-    pub fn handle_event(&mut self, event : Event) {
+    pub fn time_remaining(&self) -> SessionDuration {
+        let duration = match self.activity {
+            Activity::Focus => self.settings.focus_duration,
+            Activity::ShortBreak => self.settings.short_break_duration,
+            Activity::LongBreak => self.settings.long_break_duration,
+        };
+
+        SessionDuration::from(*duration - *self.progress)
+    }
+
+    pub fn handle_event(&mut self, event: Event) {
         match event {
             Event::Pause => self.timer_is_stopped = true,
             Event::Resume => self.timer_is_stopped = false,

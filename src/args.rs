@@ -56,11 +56,17 @@ impl DerefMut for SessionDuration {
     }
 }
 
+impl From<Duration> for SessionDuration {
+    fn from(duration: Duration) -> Self {
+        SessionDuration(duration)
+    }
+}
+
 #[derive(Debug)]
 pub enum ParseSessionDurationError {
     InvalidFormat,
     TooManySeconds,
-    SecondsNotTwoDigits,
+    NotTwoDigitsForSeconds,
     ParseIntError(std::num::ParseIntError),
 }
 
@@ -76,7 +82,7 @@ impl Display for ParseSessionDurationError {
             ParseSessionDurationError::ParseIntError(e) => {
                 write!(f, "failed to parse integer: {e}")
             }
-            ParseSessionDurationError::SecondsNotTwoDigits => {
+            ParseSessionDurationError::NotTwoDigitsForSeconds => {
                 write!(f, "seconds must be two digits")
             }
         }
@@ -103,7 +109,7 @@ impl FromStr for SessionDuration {
                 if seconds > 59 {
                     return Err(ParseSessionDurationError::TooManySeconds);
                 } else if v[1].len() != 2 {
-                    return Err(ParseSessionDurationError::SecondsNotTwoDigits);
+                    return Err(ParseSessionDurationError::NotTwoDigitsForSeconds);
                 }
 
                 Ok(SessionDuration(Duration::from_secs(minutes * 60 + seconds)))

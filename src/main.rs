@@ -1,7 +1,9 @@
-use state::Settings;
-
+use ui::UiUpdate;
 use crate::args::{Args, Parser, SessionDuration};
+use crate::state::Settings;
 use crate::state::{Event, PomodoroState};
+use std::fmt::Display;
+use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -10,6 +12,7 @@ use std::vec::Vec;
 
 mod args;
 mod state;
+mod ui;
 
 fn main() {
     let args = Args::parse();
@@ -25,21 +28,22 @@ fn run_local_session(work: SessionDuration, short: SessionDuration, long: Sessio
         focus_duration: work,
         short_break_duration: short,
         long_break_duration: long,
-        start_automatically: false, // TODO: set to true later, this is for debug purposes
+        start_automatically: false, // TODO: set to true later, this is for debugging purposes
     };
     let pomodoro_state = PomodoroState::new(pomodoro_settings);
 
     let timer_update_interval = Duration::from_millis(100);
 
     let (events_tx, events_rx) = mpsc::channel::<Event>();
-    let (tui_tx, tui_rx) = mpsc::channel::<PomodoroState>();
+    let (ui_tx, ui_rx) = mpsc::channel::<UiUpdate>();
+    let ui_txs = (ui_tx.clone(), ui_tx.clone());
 
     let mut thread_handles = Vec::new();
 
-    thread_handles.push(thread::spawn(move || tui_thread(tui_rx)));
+    thread_handles.push(thread::spawn(move || ui::ui_thread(ui_txs.0, ui_rx, events_tx)));
     //thread_handles.push(thread::spawn(move || event_handler_thread(control_tx)));
     thread_handles.push(thread::spawn(move || {
-        state_transformer_thread(pomodoro_state, timer_update_interval, events_rx, tui_tx)
+        state_transformer_thread(pomodoro_state, timer_update_interval, events_rx, ui_txs.1)
     }));
 
     for handle in thread_handles {
@@ -47,33 +51,58 @@ fn run_local_session(work: SessionDuration, short: SessionDuration, long: Sessio
     }
 }
 
-// TODO: this is a mock-up, replace with a real TUI
-fn tui_thread(tui_rx: mpsc::Receiver<PomodoroState>) {
-    loop {
-        let state = tui_rx
-            .recv()
-            .expect("channel to the state transformer thread was closed");
-        println!("{state}");
+pub enum ThreadError {
+    Io(io::Error),
+    Recv(mpsc::RecvError),
+    SendUi(mpsc::SendError<UiUpdate>),
+    SendEvent(mpsc::SendError<crossterm::event::Event>),
+}
+
+impl From<io::Error> for ThreadError {
+    fn from(error: io::Error) -> Self {
+        ThreadError::Io(error)
     }
 }
 
-fn event_handler_thread(events_tx: mpsc::Sender<Event>) {
-    todo!()
+impl From<mpsc::RecvError> for ThreadError {
+    fn from(error: mpsc::RecvError) -> Self {
+        ThreadError::Recv(error)
+    }
+}
+
+impl From<mpsc::SendError<UiUpdate>> for ThreadError {
+    fn from(error: mpsc::SendError<UiUpdate>) -> Self {
+        ThreadError::SendUi(error)
+    }
+}
+
+impl From<mpsc::SendError<crossterm::event::Event>> for ThreadError {
+    fn from(error: mpsc::SendError<crossterm::event::Event>) -> Self {
+        ThreadError::SendEvent(error)
+    }
+}
+
+impl Display for ThreadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ThreadError::Io(error) => write!(f, "I/O error: {error}"),
+            ThreadError::Recv(error) => write!(f, "channel receive error: {error}"),
+            ThreadError::SendUi(error) => write!(f, "ui channel send error: {error}"),
+            ThreadError::SendEvent(error) => write!(f, "event channel send error: {error}"),
+        }
+    }
 }
 
 fn state_transformer_thread(
     mut state: PomodoroState,
     timer_update_interval: Duration,
     events_rx: mpsc::Receiver<Event>,
-    tui_tx: mpsc::Sender<PomodoroState>,
-) {
+    ui_tx: mpsc::Sender<UiUpdate>,
+) -> Result<(), ThreadError> {
     loop {
         let now = Instant::now();
 
-        // TODO: handle error
-        tui_tx
-            .send(state.clone())
-            .expect("failed to send state to tui thread");
+        ui_tx.send(UiUpdate::StateUpdate(state.clone()))?;
 
         // TODO: handle hangup
         events_rx
@@ -81,14 +110,13 @@ fn state_transformer_thread(
             .for_each(|event| state.handle_event(event));
 
         if state.timer_is_stopped {
+            let event = events_rx.recv()?;
+            state.handle_event(event);
             // TODO: handle hangup
-            if let Ok(event) = events_rx.recv() {
-                state.handle_event(event);
-                // TODO: handle hangup
-                events_rx
-                    .try_iter()
-                    .for_each(|event| state.handle_event(event));
-            }
+            events_rx
+                .try_iter()
+                .for_each(|event| state.handle_event(event));
+
             continue;
         }
 
