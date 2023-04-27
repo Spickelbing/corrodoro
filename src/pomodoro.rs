@@ -8,10 +8,10 @@ use std::time::Duration;
 pub struct State {
     activity: Activity,
     progress: SessionDuration,
-    num_activity: u32,
+    num_focus_sessions: u32,
     pub timer_is_stopped: bool,
     settings: Settings,
-    current_activity_duration_override : Option<SessionDuration>,
+    current_activity_duration_override: Option<SessionDuration>,
 }
 
 impl State {
@@ -19,7 +19,7 @@ impl State {
         State {
             activity: Activity::Focus,
             progress: SessionDuration(Duration::from_secs(0)),
-            num_activity: 0,
+            num_focus_sessions: 0,
             timer_is_stopped: !settings.start_automatically,
             settings,
             current_activity_duration_override: None,
@@ -34,23 +34,19 @@ impl State {
         if *self.progress >= *max_duration {
             if self.settings.start_automatically {
                 *self.progress -= *max_duration;
+                self.start_timer();
             } else {
                 self.progress = Duration::from_secs(0).into();
                 self.stop_timer();
             }
+
             self.current_activity_duration_override = None;
-            self.num_activity += 1;
-            self.activity = match self.activity {
-                Activity::Focus => {
-                    if self.num_activity % 4 == 0 {
-                        Activity::LongBreak
-                    } else {
-                        Activity::ShortBreak
-                    }
-                }
-                Activity::ShortBreak => Activity::Focus,
-                Activity::LongBreak => Activity::Focus,
+
+            if self.activity.is_focus() {
+                self.num_focus_sessions += 1;
             }
+
+            self.activity = self.next_activity();
         }
     }
 
@@ -70,6 +66,22 @@ impl State {
         self.timer_is_stopped = !self.timer_is_stopped;
     }
 
+    pub fn skip_activity(&mut self) {
+        self.progress = Duration::from_secs(0).into();
+        self.current_activity_duration_override = None;
+        if self.activity.is_focus() {
+            self.num_focus_sessions += 1;
+        }
+
+        if self.settings.start_automatically {
+            self.start_timer();
+        } else {
+            self.stop_timer();
+        }
+
+        self.activity = self.next_activity();
+    }
+
     /// Does nothing if the extension in duration would lead to an overflow (probably about 3.5 billion seconds).
     pub fn extend_activity(&mut self, duration: &Duration) {
         if let Some(sum) = self.current_activity_duration().checked_add(*duration) {
@@ -80,7 +92,8 @@ impl State {
     /// Does nothing if the reducement in duration would lead to a negative duration.
     pub fn reduce_activity(&mut self, duration: &Duration) {
         if *self.time_remaining() >= *duration {
-            self.current_activity_duration_override = Some((*self.current_activity_duration() - *duration).into());
+            self.current_activity_duration_override =
+                Some((*self.current_activity_duration() - *duration).into());
         }
     }
 
@@ -94,16 +107,30 @@ impl State {
             },
         }
     }
+
+    fn next_activity(&self) -> Activity {
+        match self.activity {
+            Activity::Focus => {
+                if self.num_focus_sessions % 4 == 0 {
+                    Activity::LongBreak
+                } else {
+                    Activity::ShortBreak
+                }
+            }
+            Activity::ShortBreak => Activity::Focus,
+            Activity::LongBreak => Activity::Focus,
+        }
+    }
 }
 
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {} {}",
-            self.activity,
+            "{}\n{} {}",
             self.time_remaining(),
-            if self.timer_is_stopped { "||" } else { "" }
+            self.activity,
+            if self.timer_is_stopped { "▶" } else { "⏸" }
         )
     }
 }
@@ -113,6 +140,15 @@ pub enum Activity {
     Focus,
     ShortBreak,
     LongBreak,
+}
+
+impl Activity {
+    fn is_focus(&self) -> bool {
+        match self {
+            Activity::Focus => true,
+            _ => false,
+        }
+    }
 }
 
 impl Display for Activity {

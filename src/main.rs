@@ -15,7 +15,7 @@ fn main() {
     let args = Args::parse();
 
     match args.command {
-        args::Command::Local { work, short, long  } => run_local_session(work, short, long),
+        args::Command::Local { work, short, long } => run_local_session(work, short, long),
         _ => todo!(),
     }
 }
@@ -181,13 +181,16 @@ fn handle_event(event: &ui::Event, state: &mut pomodoro::State) -> AppShouldQuit
     match event {
         ui::Event::ToggleTimer => {
             state.toggle_timer();
-        },
+        }
         ui::Event::ExtendActivity(duration) => {
             state.extend_activity(duration);
-        },
+        }
         ui::Event::ReduceActivity(duration) => {
             state.reduce_activity(duration);
-        },
+        }
+        ui::Event::SkipActivity => {
+            state.skip_activity();
+        }
         ui::Event::Quit => return AppShouldQuit(true),
         _ => (),
     }
