@@ -15,7 +15,7 @@ fn main() {
     let args = Args::parse();
 
     match args.command {
-        args::Command::Local { work, short, long } => run_local_session(work, short, long),
+        args::Command::Local { work, short, long  } => run_local_session(work, short, long),
         _ => todo!(),
     }
 }
@@ -29,11 +29,11 @@ fn run_local_session(
         focus_duration: work,
         short_break_duration: short,
         long_break_duration: long,
-        start_automatically: false, // TODO: set to true later, this is for debugging purposes
+        start_automatically: false,
     };
     let pomodoro_state = pomodoro::State::new(pomodoro_settings);
 
-    let timer_update_interval = Duration::from_millis(100);
+    let timer_update_interval = Duration::from_millis(50);
 
     let (events_tx, events_rx) = mpsc::channel::<ui::Event>();
     let (ui_tx, ui_rx) = mpsc::channel::<pomodoro::State>();
@@ -55,7 +55,7 @@ fn run_local_session(
     }));
 
     for handle in thread_handles {
-        handle.join().expect("failed to join thread"); // TODO: handle error
+        handle.join().expect("failed to join thread"); // TODO: handle join error, handle `AppError`s
     }
 }
 
@@ -181,7 +181,13 @@ fn handle_event(event: &ui::Event, state: &mut pomodoro::State) -> AppShouldQuit
     match event {
         ui::Event::ToggleTimer => {
             state.toggle_timer();
-        }
+        },
+        ui::Event::ExtendActivity(duration) => {
+            state.extend_activity(duration);
+        },
+        ui::Event::ReduceActivity(duration) => {
+            state.reduce_activity(duration);
+        },
         ui::Event::Quit => return AppShouldQuit(true),
         _ => (),
     }

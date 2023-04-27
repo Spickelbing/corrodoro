@@ -11,6 +11,7 @@ pub struct State {
     num_activity: u32,
     pub timer_is_stopped: bool,
     settings: Settings,
+    current_activity_duration_override : Option<SessionDuration>,
 }
 
 impl State {
@@ -21,20 +22,23 @@ impl State {
             num_activity: 0,
             timer_is_stopped: !settings.start_automatically,
             settings,
+            current_activity_duration_override: None,
         }
     }
 
     pub fn increase_progress(&mut self, duration: &Duration) {
         *self.progress += *duration;
 
-        let max_duration = &match self.activity {
-            Activity::Focus => self.settings.focus_duration,
-            Activity::ShortBreak => self.settings.short_break_duration,
-            Activity::LongBreak => self.settings.long_break_duration,
-        };
+        let max_duration = self.current_activity_duration();
 
-        if *self.progress >= **max_duration {
-            *self.progress -= **max_duration;
+        if *self.progress >= *max_duration {
+            if self.settings.start_automatically {
+                *self.progress -= *max_duration;
+            } else {
+                self.progress = Duration::from_secs(0).into();
+                self.stop_timer();
+            }
+            self.current_activity_duration_override = None;
             self.num_activity += 1;
             self.activity = match self.activity {
                 Activity::Focus => {
@@ -51,13 +55,7 @@ impl State {
     }
 
     pub fn time_remaining(&self) -> SessionDuration {
-        let duration = match self.activity {
-            Activity::Focus => self.settings.focus_duration,
-            Activity::ShortBreak => self.settings.short_break_duration,
-            Activity::LongBreak => self.settings.long_break_duration,
-        };
-
-        SessionDuration::from(*duration - *self.progress)
+        (*self.current_activity_duration() - *self.progress).into()
     }
 
     pub fn start_timer(&mut self) {
@@ -71,6 +69,31 @@ impl State {
     pub fn toggle_timer(&mut self) {
         self.timer_is_stopped = !self.timer_is_stopped;
     }
+
+    /// Does nothing if the extension in duration would lead to an overflow (probably about 3.5 billion seconds).
+    pub fn extend_activity(&mut self, duration: &Duration) {
+        if let Some(sum) = self.current_activity_duration().checked_add(*duration) {
+            self.current_activity_duration_override = Some(sum.into());
+        }
+    }
+
+    /// Does nothing if the reducement in duration would lead to a negative duration.
+    pub fn reduce_activity(&mut self, duration: &Duration) {
+        if *self.time_remaining() >= *duration {
+            self.current_activity_duration_override = Some((*self.current_activity_duration() - *duration).into());
+        }
+    }
+
+    fn current_activity_duration(&self) -> SessionDuration {
+        match self.current_activity_duration_override {
+            Some(duration) => duration,
+            None => match self.activity {
+                Activity::Focus => self.settings.focus_duration,
+                Activity::ShortBreak => self.settings.short_break_duration,
+                Activity::LongBreak => self.settings.long_break_duration,
+            },
+        }
+    }
 }
 
 impl Display for State {
@@ -79,7 +102,7 @@ impl Display for State {
             f,
             "{} {} {}",
             self.activity,
-            self.progress,
+            self.time_remaining(),
             if self.timer_is_stopped { "||" } else { "" }
         )
     }
@@ -192,8 +215,10 @@ impl FromStr for SessionDuration {
 
 impl Display for SessionDuration {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let minutes = self.0.as_secs() / 60;
-        let seconds = self.0.as_secs() % 60;
+        let display_secs = self.0.as_secs_f64().ceil() as u64;
+
+        let minutes = display_secs / 60;
+        let seconds = display_secs % 60;
         write!(f, "{minutes}:{seconds:02}")
     }
 }
