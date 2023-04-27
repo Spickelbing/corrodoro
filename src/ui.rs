@@ -1,6 +1,6 @@
-use crate::{AppError, CloseThreadNotificiation};
 use crate::pomodoro;
-use crossterm::event::{Event as CrosstermEvent, KeyCode, MouseEventKind};
+use crate::{AppError, CloseThreadNotificiation};
+use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyModifiers, MouseEventKind};
 use std::io;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -90,13 +90,13 @@ fn draw_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, state: &Option<pomod
         .add_modifier(Modifier::BOLD);
 
     let left_block = base_block.clone().title(Spans::from(vec![
-        Span::styled("s", title_text_initial_style.clone()),
-        Span::styled("ettings", title_text_base_style.clone()),
+        Span::styled("s", title_text_initial_style),
+        Span::styled("ettings", title_text_base_style),
     ]));
 
     let right_block = base_block.clone().title(Spans::from(vec![
-        Span::styled("t", title_text_initial_style.clone()),
-        Span::styled("imer", title_text_base_style.clone()),
+        Span::styled("t", title_text_initial_style),
+        Span::styled("imer", title_text_base_style),
     ]));
 
     let timer_text = match state {
@@ -129,6 +129,14 @@ impl TryFrom<CrosstermEvent> for Event {
 
     fn try_from(value: CrosstermEvent) -> Result<Self, Self::Error> {
         match value {
+            CrosstermEvent::Key(key_event)
+                if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                match key_event.code {
+                    KeyCode::Char('c') => Some(Event::Quit),
+                    _ => None,
+                }
+            }
             CrosstermEvent::Key(key_event) => match key_event.code {
                 KeyCode::Char('q') => Some(Event::Quit),
                 KeyCode::Char('r') => Some(Event::ResetTimer),
@@ -136,6 +144,7 @@ impl TryFrom<CrosstermEvent> for Event {
                 KeyCode::Char(' ') => Some(Event::ToggleTimer),
                 KeyCode::Up => Some(Event::ExtendActivity(Duration::from_secs(60))),
                 KeyCode::Down => Some(Event::ReduceActivity(Duration::from_secs(60))),
+                KeyCode::Esc => Some(Event::Quit),
                 _ => None,
             },
             CrosstermEvent::Mouse(mouse_event) => match mouse_event.kind {
