@@ -149,7 +149,7 @@ fn state_transformer_thread(
             }
             continue;
         }
-        
+
         // TODO: handle hangup
         for event in events_rx.try_iter() {
             if *handle_event(&event, &mut state) {

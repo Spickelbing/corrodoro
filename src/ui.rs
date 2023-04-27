@@ -37,12 +37,12 @@ pub fn ui_thread(
         match close_rx.try_recv() {
             Ok(_) => {
                 break;
-            },
-            Err(error@mpsc::TryRecvError::Disconnected) => {
+            }
+            Err(error @ mpsc::TryRecvError::Disconnected) => {
                 return_val = Err(AppError::from(error));
                 break;
-            },
-            Err(mpsc::TryRecvError::Empty) => {},
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
         }
 
         // TODO: handle hangup
