@@ -1,8 +1,9 @@
-use crate::state::{Event, PomodoroState};
-use crate::ThreadError;
-use crossterm;
+use crate::{AppError, CloseThreadNotificiation};
+use crate::pomodoro;
+use crossterm::event::{Event as CrosstermEvent, KeyCode, MouseEventKind};
 use std::io;
 use std::sync::mpsc;
+use std::time::{Duration, Instant};
 use tui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
@@ -11,16 +12,11 @@ use tui::{
     widgets, Frame, Terminal,
 };
 
-pub enum UiUpdate {
-    StateUpdate(PomodoroState),
-    TerminalEvent(crossterm::event::Event),
-}
-
 pub fn ui_thread(
-    ui_tx: mpsc::Sender<UiUpdate>,
-    ui_rx: mpsc::Receiver<UiUpdate>,
+    ui_rx: mpsc::Receiver<pomodoro::State>,
     events_tx: mpsc::Sender<Event>,
-) -> Result<(), ThreadError> {
+    close_rx: mpsc::Receiver<CloseThreadNotificiation>,
+) -> Result<(), AppError> {
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
 
@@ -31,29 +27,42 @@ pub fn ui_thread(
         crossterm::event::EnableMouseCapture
     )?;
 
-    let event_handler_thread = std::thread::spawn(move || {
-        event_handler_thread(ui_tx);
-    });
+    let update_interval = std::time::Duration::from_millis(100);
 
-    let mut state: Option<PomodoroState> = None;
+    let mut return_val = Ok(());
+    let mut state: Option<pomodoro::State> = None;
     loop {
-        match ui_rx.recv()? {
-            UiUpdate::StateUpdate(new_state) => {
-                state = Some(new_state);
-            }
-            UiUpdate::TerminalEvent(event) => match event {
-                crossterm::event::Event::Resize(_, _) => (),
-                _ => continue,
+        let now = Instant::now();
+
+        match close_rx.try_recv() {
+            Ok(_) => {
+                break;
             },
-        };
+            Err(error@mpsc::TryRecvError::Disconnected) => {
+                return_val = Err(AppError::from(error));
+                break;
+            },
+            Err(mpsc::TryRecvError::Empty) => {},
+        }
+
+        // TODO: handle hangup
+        if let Some(new_state) = ui_rx.try_iter().last() {
+            state = Some(new_state);
+        }
         // let ui_state = ...; // for highlighting current setting selection, etc.
+
+        for event in try_read_crossterm_events(10)? {
+            events_tx.send(event)?;
+        }
 
         terminal.draw(|f| {
             draw_ui(f, &state);
         })?;
-    }
 
-    event_handler_thread.join().unwrap(); // TODO: handle error
+        if now.elapsed() < update_interval {
+            std::thread::sleep(update_interval - now.elapsed());
+        }
+    }
 
     crossterm::execute!(
         terminal.backend_mut(),
@@ -61,19 +70,11 @@ pub fn ui_thread(
         crossterm::event::DisableMouseCapture,
     )?;
     crossterm::terminal::disable_raw_mode()?;
+
+    return_val
 }
 
-fn event_handler_thread(
-    ui_tx : mpsc::Sender<UiUpdate>,
-) -> Result<(), ThreadError> {
-    loop {
-        let event = crossterm::event::read()?;
-        // TODO: stop this thread on events that mean exit
-        ui_tx.send(UiUpdate::TerminalEvent(event))?;
-    }
-}
-
-fn draw_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, state: &Option<PomodoroState>) {
+fn draw_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, state: &Option<pomodoro::State>) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
@@ -109,4 +110,62 @@ fn draw_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, state: &Option<Pomod
 
     frame.render_widget(left_block, chunks[0]);
     frame.render_widget(right_block, chunks[1]);
+}
+
+/// represents a user-input event, independent of the UI
+pub enum Event {
+    Quit,
+    ToggleTimer,
+    ResetTimer,
+    SkipActivity,
+    ExtendActivity(Duration),
+    ReduceActivity(Duration),
+}
+
+pub struct EventConversionError;
+
+impl TryFrom<CrosstermEvent> for Event {
+    type Error = EventConversionError;
+
+    fn try_from(value: CrosstermEvent) -> Result<Self, Self::Error> {
+        match value {
+            CrosstermEvent::Key(key_event) => match key_event.code {
+                KeyCode::Char('q') => Some(Event::Quit),
+                KeyCode::Char('r') => Some(Event::ResetTimer),
+                KeyCode::Char('s') => Some(Event::SkipActivity),
+                KeyCode::Char(' ') => Some(Event::ToggleTimer),
+                KeyCode::Up => Some(Event::ExtendActivity(Duration::from_secs(60))),
+                KeyCode::Down => Some(Event::ReduceActivity(Duration::from_secs(60))),
+                _ => None,
+            },
+            CrosstermEvent::Mouse(mouse_event) => match mouse_event.kind {
+                MouseEventKind::ScrollUp => Some(Event::ExtendActivity(Duration::from_secs(60))),
+                MouseEventKind::ScrollDown => Some(Event::ReduceActivity(Duration::from_secs(60))),
+                _ => None,
+            },
+            _ => None,
+        }
+        .ok_or(EventConversionError)
+    }
+}
+
+fn try_read_crossterm_events(max_events: u32) -> io::Result<Vec<Event>> {
+    let mut translated_events = vec![];
+
+    let mut i = 0;
+    while crossterm::event::poll(Duration::from_secs(0))? {
+        if i == max_events {
+            break;
+        }
+
+        let event = crossterm::event::read()?;
+
+        if let Ok(translated_event) = Event::try_from(event) {
+            translated_events.push(translated_event);
+        }
+
+        i += 1;
+    }
+
+    Ok(translated_events)
 }
