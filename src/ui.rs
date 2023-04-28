@@ -90,62 +90,113 @@ fn draw_ui(
     frame: &mut Frame<CrosstermBackend<io::Stdout>>,
     state: &Option<pomodoro::State>,
 ) -> ApproximateLayout {
-    let toplevel_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
-        .split(frame.size());
-    let (settings_chunk, timer_chunk) = (toplevel_chunks[0], toplevel_chunks[1]);
+    let (settings_chunk, timer_chunk);
+    {
+        let toplevel_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+            .split(frame.size());
+        (settings_chunk, timer_chunk) = (toplevel_chunks[0], toplevel_chunks[1]);
+    }
 
-    let timer_ceil_padding = (timer_chunk.height / 2).saturating_sub(1);
-    let timer_floor_padding = timer_chunk
-        .height
-        .saturating_sub(timer_ceil_padding)
-        .saturating_sub(2);
+    let timer_clock_sub_chunk;
+    {
+        let (clock_width, clock_height) = (31, 15); // TODO: make dimensions dynamic
+        let (left_padding, right_padding);
+        {
+            let leftover_width = timer_chunk.width.saturating_sub(clock_width);
+            left_padding = leftover_width / 2;
+            right_padding = leftover_width.saturating_sub(left_padding);
+        }
+        let (top_padding, bottom_padding);
+        {
+            let leftover_height = timer_chunk.height.saturating_sub(clock_height);
+            top_padding = leftover_height / 2;
+            bottom_padding = leftover_height.saturating_sub(top_padding);
+        }
+        let vertically_centered_sub_chunk;
+        {
+            let vertical_sub_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(top_padding),
+                    Constraint::Length(clock_height),
+                    Constraint::Length(bottom_padding),
+                ])
+                .split(timer_chunk);
+            vertically_centered_sub_chunk = vertical_sub_chunks[1];
+        }
+        let horizontal_sub_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(left_padding),
+                Constraint::Length(clock_width),
+                Constraint::Length(right_padding),
+            ])
+            .split(vertically_centered_sub_chunk);
+        timer_clock_sub_chunk = horizontal_sub_chunks[1];
+    }
 
-    let timer_sub_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(timer_ceil_padding),
-            Constraint::Length(2),
-            Constraint::Length(timer_floor_padding),
-        ])
-        .split(timer_chunk);
+    let timer_text_sub_chunk; // TODO: center better
+    {
+        let ceil_padding = (timer_chunk.height / 2).saturating_sub(1);
+        let floor_padding = timer_chunk
+            .height
+            .saturating_sub(ceil_padding)
+            .saturating_sub(2);
+        let vertical_sub_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(ceil_padding),
+                Constraint::Length(2),
+                Constraint::Length(floor_padding),
+            ])
+            .split(timer_chunk);
+        timer_text_sub_chunk = vertical_sub_chunks[1];
+    }
 
-    let base_block = widgets::Block::default()
-        .borders(widgets::Borders::ALL)
-        .style(Style::default().bg(Color::Black));
+    let (widget_settings_block, widget_timer_block);
+    {
+        let base_block = widgets::Block::default()
+            .borders(widgets::Borders::ALL)
+            .style(Style::default().bg(Color::Black));
+        let title_text_initial_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
+        let title_text_base_style = Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD);
+        widget_settings_block = base_block.clone().title(Spans::from(vec![
+            Span::styled("s", title_text_initial_style),
+            Span::styled("ettings", title_text_base_style),
+        ]));
+        widget_timer_block = base_block.clone().title(Spans::from(vec![
+            Span::styled("t", title_text_initial_style),
+            Span::styled("imer", title_text_base_style),
+        ]));
+    }
 
-    let title_text_initial_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
-    let title_text_base_style = Style::default()
-        .fg(Color::White)
-        .add_modifier(Modifier::BOLD);
+    let widget_timer_text;
+    {
+        let timer_text = match state {
+            Some(state) => format!("{state}"),
+            None => String::from("no timer state available"),
+        };
+        widget_timer_text = widgets::Paragraph::new(timer_text).alignment(Alignment::Center);
+    }
 
-    let settings_block = base_block.clone().title(Spans::from(vec![
-        Span::styled("s", title_text_initial_style),
-        Span::styled("ettings", title_text_base_style),
-    ]));
+    let widget_clock_text_art;
+    {
+        let clock_text_art = partial_unicode_circle(100);
+        widget_clock_text_art = widgets::Paragraph::new(clock_text_art).alignment(Alignment::Left);
+    }
 
-    let timer_block = base_block.clone().title(Spans::from(vec![
-        Span::styled("t", title_text_initial_style),
-        Span::styled("imer", title_text_base_style),
-    ]));
-
-    let timer_text = match state {
-        Some(state) => format!("{state}"),
-        None => String::from("no timer state available"),
-    };
-
-    let timer_state = widgets::Paragraph::new(timer_text)
-        //.block(timer_block)
-        .alignment(Alignment::Center);
-
-    frame.render_widget(settings_block, settings_chunk);
-    frame.render_widget(timer_block, timer_chunk);
-    frame.render_widget(timer_state, timer_sub_chunks[1]);
+    frame.render_widget(widget_clock_text_art, timer_clock_sub_chunk);
+    frame.render_widget(widget_timer_text, timer_text_sub_chunk);
+    frame.render_widget(widget_settings_block, settings_chunk);
+    frame.render_widget(widget_timer_block, timer_chunk);
 
     ApproximateLayout {
-        settings_widget: toplevel_chunks[0],
-        timer_widget: toplevel_chunks[1],
+        settings_widget: settings_chunk,
+        timer_widget: timer_chunk,
     }
 }
 
@@ -217,4 +268,26 @@ fn try_read_crossterm_events(
     }
 
     Ok(translated_events)
+}
+
+fn partial_unicode_circle(percentage: u32) -> String {
+    let percentage = percentage.min(100);
+
+    String::from(
+        "            ▄▄▄▄▄▄▄
+       ▄▄▀▀▀       ▀▀▀▄▄
+     ▄▀                 ▀▄
+   ▄▀                     ▀▄
+  █                         █
+ █                           █
+▄▀                           ▀▄
+█                             █
+█                             █
+ █                           █
+ ▀▄                         ▄▀
+  ▀▄                       ▄▀
+    ▀▄                   ▄▀
+      ▀▄▄             ▄▄▀
+         ▀▀▀▄▄▄▄▄▄▄▀▀▀",
+    )
 }
