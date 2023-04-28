@@ -144,10 +144,7 @@ pub enum Activity {
 
 impl Activity {
     fn is_focus(&self) -> bool {
-        match self {
-            Activity::Focus => true,
-            _ => false,
-        }
+        matches!(self, Activity::Focus)
     }
 }
 

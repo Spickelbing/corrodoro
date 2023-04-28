@@ -96,13 +96,11 @@ fn draw_ui(
         .split(frame.size());
     let (settings_chunk, timer_chunk) = (toplevel_chunks[0], toplevel_chunks[1]);
 
-    let timer_ceil_padding = (timer_chunk.height / 2).checked_sub(1).unwrap_or(0);
+    let timer_ceil_padding = (timer_chunk.height / 2).saturating_sub(1);
     let timer_floor_padding = timer_chunk
         .height
-        .checked_sub(timer_ceil_padding)
-        .unwrap_or(0)
-        .checked_sub(2)
-        .unwrap_or(0);
+        .saturating_sub(timer_ceil_padding)
+        .saturating_sub(2);
 
     let timer_sub_chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -133,7 +131,7 @@ fn draw_ui(
     ]));
 
     let timer_text = match state {
-        Some(state) => format!("{}", state),
+        Some(state) => format!("{state}"),
         None => String::from("no timer state available"),
     };
 
