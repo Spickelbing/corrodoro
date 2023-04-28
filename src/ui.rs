@@ -139,19 +139,20 @@ fn draw_ui(
 
     let timer_text_sub_chunk; // TODO: center better
     {
-        let ceil_padding = (timer_chunk.height / 2).saturating_sub(1);
-        let floor_padding = timer_chunk
+        let text_height = 2; // TODO: make this dynamic
+        let ceil_padding = timer_clock_sub_chunk.height / 2;
+        let floor_padding = timer_clock_sub_chunk
             .height
             .saturating_sub(ceil_padding)
-            .saturating_sub(2);
+            .saturating_sub(text_height);
         let vertical_sub_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(ceil_padding),
-                Constraint::Length(2),
+                Constraint::Length(text_height),
                 Constraint::Length(floor_padding),
             ])
-            .split(timer_chunk);
+            .split(timer_clock_sub_chunk);
         timer_text_sub_chunk = vertical_sub_chunks[1];
     }
 
