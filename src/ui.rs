@@ -2,7 +2,6 @@ use crate::pomodoro;
 use crate::{AppError, CloseThreadNotificiation};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyModifiers, MouseEventKind};
 use std::io;
-use std::ops::Range;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tui::{
@@ -12,7 +11,7 @@ use tui::{
     text::{Span, Spans},
     widgets, Frame, Terminal,
 };
-use unicode_segmentation::UnicodeSegmentation;
+use crate::animations;
 
 // TODO: Let each ui update be the result of an event from the pomodoro thread,
 // and from a separate thread that handles user input.
@@ -103,7 +102,7 @@ fn draw_ui(
 
     let timer_clock_sub_chunk;
     {
-        let (clock_width, clock_height) = (31, 15); // TODO: make dimensions dynamic
+        let (clock_width, clock_height) = (21, 11); // TODO: make dimensions dynamic
         let (left_padding, right_padding);
         {
             let leftover_width = timer_chunk.width.saturating_sub(clock_width);
@@ -139,7 +138,7 @@ fn draw_ui(
         timer_clock_sub_chunk = horizontal_sub_chunks[1];
     }
 
-    let timer_text_sub_chunk; // TODO: center better
+    let timer_text_sub_chunk;
     {
         let text_height = 2; // TODO: make this dynamic
         let ceil_padding = timer_clock_sub_chunk.height / 2;
@@ -192,7 +191,7 @@ fn draw_ui(
             Some(state) => state.progress_percentage(),
             None => 1.0,
         };
-        let clock_text_art = partial_unicode_circle(progress_percentage);
+        let clock_text_art = animations::partial_box(1.0 - progress_percentage);
         widget_clock_text_art = widgets::Paragraph::new(clock_text_art).alignment(Alignment::Left);
     }
 
@@ -275,117 +274,4 @@ fn try_read_crossterm_events(
     }
 
     Ok(translated_events)
-}
-
-fn partial_unicode_circle(percentage: f64) -> String {
-    let percentage = percentage.max(0.0).min(1.0);
-
-    const WHOLE_CIRCLE: &str = "            ▄▄▄▄▄▄▄
-       ▄▄▀▀▀       ▀▀▀▄▄
-     ▄▀                 ▀▄
-   ▄▀                     ▀▄
-  █                         █
- █                           █
-▄▀                           ▀▄
-█                             █
-█                             █
- █                           █
- ▀▄                         ▄▀
-  ▀▄                       ▄▀
-    ▀▄                   ▄▀
-      ▀▄▄             ▄▄▀
-         ▀▀▀▄▄▄▄▄▄▄▀▀▀";
-
-    const GRAPHEME_REPLACEMENTS : [(usize, &str); 80] = [
-        (15, "▗"),
-        (14, " "),
-        (13, " "),
-        (12, " "),
-        (31, " "),
-        (30, " "),
-        (29, " "),
-        (28, " "),
-        (27, " "),
-        (51, " "),
-        (50, " "),
-        (76, " "),
-        (75, " "),
-        (103, "▄"),
-        (103, " "),
-        (132, "▄"),
-        (132, " "),
-        (163, " "),
-        (162, " "),
-        (194, "▄"),
-        (194, " "),
-        (226, "▄"),
-        (226, " "),
-        (259, "▄"),
-        (259, " "),
-        (290, " "),
-        (291, " "),
-        (322, " "),
-        (323, " "),
-        (354, " "),
-        (355, " "),
-        (384, " "),
-        (385, " "),
-        (386, " "),
-        (413, " "),
-        (414, " "),
-        (415, " "),
-        (416, " "),
-        (417, " "),
-        (418, " "),
-        (419, " "),
-        (420, " "),
-        (421, " "),
-        (422, " "),
-        (423, " "),
-        (424, " "),
-        (425, " "),
-        (400, " "),
-        (401, " "),
-        (402, " "),
-        (375, " "),
-        (376, " "),
-        (347, " "),
-        (348, " "),
-        (317, " "),
-        (318, " "),
-        (287, "▀"),
-        (287, " "),
-        (256, "▀"),
-        (256, " "),
-        (224, "▀"),
-        (224, " "),
-        (192, " "),
-        (191, " "),
-        (160, "▀"),
-        (160, " "),
-        (129, "▀"),
-        (129, " "),
-        (99, " "),
-        (98, " "),
-        (70, " "),
-        (69, " "),
-        (43, " "),
-        (42, " "),
-        (41, " "),
-        (40, " "),
-        (39, " "),
-        (18, " "),
-        (17, " "),
-        (16, " "),
-    ];
-
-    let take_n = (GRAPHEME_REPLACEMENTS.len() as f64 * percentage) as usize;
-    let mut graphemes : Vec<&str> = WHOLE_CIRCLE.graphemes(true).collect();
-    
-    for i in 0..take_n {
-        let (replace_i, replace_s) = GRAPHEME_REPLACEMENTS[i];
-        graphemes[replace_i] = replace_s;
-    }
-
-    graphemes.into_iter().collect()
 }

@@ -7,6 +7,8 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 use std::vec::Vec;
+
+mod animations;
 mod args;
 mod pomodoro;
 mod ui;
