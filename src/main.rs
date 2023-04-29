@@ -125,6 +125,7 @@ impl Display for AppError {
     }
 }
 
+// TODO: separate into timer and event handler thread, where event handler answers to events immediately
 fn state_transformer_thread(
     mut state: pomodoro::State,
     timer_update_interval: Duration,

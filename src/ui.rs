@@ -2,6 +2,7 @@ use crate::pomodoro;
 use crate::{AppError, CloseThreadNotificiation};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyModifiers, MouseEventKind};
 use std::io;
+use std::ops::Range;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tui::{
@@ -11,6 +12,7 @@ use tui::{
     text::{Span, Spans},
     widgets, Frame, Terminal,
 };
+use unicode_segmentation::UnicodeSegmentation;
 
 // TODO: Let each ui update be the result of an event from the pomodoro thread,
 // and from a separate thread that handles user input.
@@ -186,7 +188,11 @@ fn draw_ui(
 
     let widget_clock_text_art;
     {
-        let clock_text_art = partial_unicode_circle(100);
+        let progress_percentage = match state {
+            Some(state) => state.progress_percentage(),
+            None => 1.0,
+        };
+        let clock_text_art = partial_unicode_circle(progress_percentage);
         widget_clock_text_art = widgets::Paragraph::new(clock_text_art).alignment(Alignment::Left);
     }
 
@@ -271,11 +277,10 @@ fn try_read_crossterm_events(
     Ok(translated_events)
 }
 
-fn partial_unicode_circle(percentage: u32) -> String {
-    let percentage = percentage.min(100);
+fn partial_unicode_circle(percentage: f64) -> String {
+    let percentage = percentage.max(0.0).min(1.0);
 
-    String::from(
-        "            ▄▄▄▄▄▄▄
+    const WHOLE_CIRCLE: &str = "            ▄▄▄▄▄▄▄
        ▄▄▀▀▀       ▀▀▀▄▄
      ▄▀                 ▀▄
    ▄▀                     ▀▄
@@ -289,6 +294,98 @@ fn partial_unicode_circle(percentage: u32) -> String {
   ▀▄                       ▄▀
     ▀▄                   ▄▀
       ▀▄▄             ▄▄▀
-         ▀▀▀▄▄▄▄▄▄▄▀▀▀",
-    )
+         ▀▀▀▄▄▄▄▄▄▄▀▀▀";
+
+    const GRAPHEME_REPLACEMENTS : [(usize, &str); 80] = [
+        (15, "▗"),
+        (14, " "),
+        (13, " "),
+        (12, " "),
+        (31, " "),
+        (30, " "),
+        (29, " "),
+        (28, " "),
+        (27, " "),
+        (51, " "),
+        (50, " "),
+        (76, " "),
+        (75, " "),
+        (103, "▄"),
+        (103, " "),
+        (132, "▄"),
+        (132, " "),
+        (163, " "),
+        (162, " "),
+        (194, "▄"),
+        (194, " "),
+        (226, "▄"),
+        (226, " "),
+        (259, "▄"),
+        (259, " "),
+        (290, " "),
+        (291, " "),
+        (322, " "),
+        (323, " "),
+        (354, " "),
+        (355, " "),
+        (384, " "),
+        (385, " "),
+        (386, " "),
+        (413, " "),
+        (414, " "),
+        (415, " "),
+        (416, " "),
+        (417, " "),
+        (418, " "),
+        (419, " "),
+        (420, " "),
+        (421, " "),
+        (422, " "),
+        (423, " "),
+        (424, " "),
+        (425, " "),
+        (400, " "),
+        (401, " "),
+        (402, " "),
+        (375, " "),
+        (376, " "),
+        (347, " "),
+        (348, " "),
+        (317, " "),
+        (318, " "),
+        (287, "▀"),
+        (287, " "),
+        (256, "▀"),
+        (256, " "),
+        (224, "▀"),
+        (224, " "),
+        (192, " "),
+        (191, " "),
+        (160, "▀"),
+        (160, " "),
+        (129, "▀"),
+        (129, " "),
+        (99, " "),
+        (98, " "),
+        (70, " "),
+        (69, " "),
+        (43, " "),
+        (42, " "),
+        (41, " "),
+        (40, " "),
+        (39, " "),
+        (18, " "),
+        (17, " "),
+        (16, " "),
+    ];
+
+    let take_n = (GRAPHEME_REPLACEMENTS.len() as f64 * percentage) as usize;
+    let mut graphemes : Vec<&str> = WHOLE_CIRCLE.graphemes(true).collect();
+    
+    for i in 0..take_n {
+        let (replace_i, replace_s) = GRAPHEME_REPLACEMENTS[i];
+        graphemes[replace_i] = replace_s;
+    }
+
+    graphemes.into_iter().collect()
 }

@@ -97,6 +97,10 @@ impl State {
         }
     }
 
+    pub fn progress_percentage(&self) -> f64 {
+        self.progress.as_secs_f64() / self.current_activity_duration().as_secs_f64()
+    }
+
     fn current_activity_duration(&self) -> SessionDuration {
         match self.current_activity_duration_override {
             Some(duration) => duration,
