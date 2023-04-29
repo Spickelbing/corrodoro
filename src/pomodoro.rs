@@ -9,7 +9,7 @@ pub struct State {
     activity: Activity,
     progress: SessionDuration,
     num_focus_sessions: u32,
-    pub timer_is_stopped: bool,
+    timer_is_active: bool,
     settings: Settings,
     current_activity_duration_override: Option<SessionDuration>,
 }
@@ -20,14 +20,14 @@ impl State {
             activity: Activity::Focus,
             progress: SessionDuration(Duration::from_secs(0)),
             num_focus_sessions: 0,
-            timer_is_stopped: !settings.start_automatically,
+            timer_is_active: settings.start_automatically,
             settings,
             current_activity_duration_override: None,
         }
     }
 
-    pub fn increase_progress(&mut self, duration: &Duration) {
-        *self.progress += *duration;
+    pub fn increase_progress(&mut self, duration: Duration) {
+        *self.progress += duration;
 
         let max_duration = self.current_activity_duration();
 
@@ -55,15 +55,19 @@ impl State {
     }
 
     pub fn start_timer(&mut self) {
-        self.timer_is_stopped = false;
+        self.timer_is_active = true;
     }
 
     pub fn stop_timer(&mut self) {
-        self.timer_is_stopped = true;
+        self.timer_is_active = false;
     }
 
     pub fn toggle_timer(&mut self) {
-        self.timer_is_stopped = !self.timer_is_stopped;
+        self.timer_is_active = !self.timer_is_active;
+    }
+
+    pub fn timer_is_active(&self) -> bool {
+        self.timer_is_active
     }
 
     pub fn skip_activity(&mut self) {
@@ -134,7 +138,7 @@ impl Display for State {
             "{}\n{} {}",
             self.time_remaining(),
             self.activity,
-            if self.timer_is_stopped { "▶" } else { "⏸" }
+            if self.timer_is_active { "⏸" } else { "▶" }
         )
     }
 }

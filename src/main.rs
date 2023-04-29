@@ -1,8 +1,9 @@
 use crate::args::{Args, Parser};
+use crossbeam::channel::{after, unbounded, Receiver, RecvError, SendError, Sender, TryRecvError};
+use crossbeam::select;
 use std::fmt::Display;
 use std::io;
 use std::ops::Deref;
-use crossbeam::channel::{unbounded, RecvError, TryRecvError, SendError, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -35,8 +36,6 @@ fn run_local_session(
     };
     let pomodoro_state = pomodoro::State::new(pomodoro_settings);
 
-    let timer_update_interval = Duration::from_millis(50);
-
     let (events_tx, events_rx) = unbounded::<ui::Event>();
     let (ui_tx, ui_rx) = unbounded::<pomodoro::State>();
     let (close_ui_tx, close_ui_rx) = unbounded::<CloseThreadNotificiation>();
@@ -49,8 +48,8 @@ fn run_local_session(
     thread_handles.push(thread::spawn(move || {
         state_transformer_thread(
             pomodoro_state,
-            timer_update_interval,
             events_rx,
+            Duration::from_millis(100),
             ui_tx,
             close_ui_tx,
         )
@@ -127,46 +126,41 @@ impl Display for AppError {
     }
 }
 
-// TODO: separate into timer and event handler thread, where event handler answers to events immediately
 fn state_transformer_thread(
     mut state: pomodoro::State,
-    timer_update_interval: Duration,
     events_rx: Receiver<ui::Event>,
+    timer_update_interval: Duration,
     ui_tx: Sender<pomodoro::State>,
     close_ui_tx: Sender<CloseThreadNotificiation>,
 ) -> Result<(), AppError> {
+    let mut start_time;
+    let mut after_rx;
+    let reset_timer = || (Instant::now(), after(timer_update_interval));
+    (start_time, after_rx) = reset_timer();
+
     loop {
-        let now = Instant::now();
         ui_tx.send(state.clone())?;
 
-        if state.timer_is_stopped {
-            // this blocks the thread until a ui event is received
-            for event in [events_rx.recv()?]
-                .into_iter()
-                .chain(events_rx.try_iter().into_iter())
-            {
+        select! {
+            recv(after_rx) -> instant => {
+                instant?;
+                if state.timer_is_active() {
+                    state.increase_progress(start_time.elapsed());
+                    (start_time, after_rx) = reset_timer();
+                }
+            }
+            recv(events_rx) -> event => {
+                let event = event?;
+                let timer_was_stopped = !state.timer_is_active();
                 if *handle_event(&event, &mut state) {
                     close_ui_tx.send(CloseThreadNotificiation)?;
                     return Ok(());
                 }
-            }
-            continue;
-        }
-
-        // TODO: handle hangup
-        for event in events_rx.try_iter() {
-            if *handle_event(&event, &mut state) {
-                close_ui_tx.send(CloseThreadNotificiation)?;
-                return Ok(());
+                if timer_was_stopped && state.timer_is_active() {
+                    (start_time, after_rx) = reset_timer();
+                }
             }
         }
-
-        let elapsed = now.elapsed();
-        if elapsed < timer_update_interval {
-            thread::sleep(timer_update_interval - elapsed);
-        }
-
-        state.increase_progress(&now.elapsed());
     }
 }
 
