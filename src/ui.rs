@@ -2,7 +2,7 @@ use crate::pomodoro;
 use crate::{AppError, CloseThreadNotificiation};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyModifiers, MouseEventKind};
 use std::io;
-use std::sync::mpsc;
+use crossbeam::channel::{TryRecvError, Receiver, Sender};
 use std::time::{Duration, Instant};
 use tui::{
     backend::CrosstermBackend,
@@ -18,9 +18,9 @@ use crate::animations;
 // It is too resource-hungry to draw to the terminal in a pre-determined interval,
 // if it is to be short enough to feel responsive.
 pub fn ui_thread(
-    ui_rx: mpsc::Receiver<pomodoro::State>,
-    events_tx: mpsc::Sender<Event>,
-    close_rx: mpsc::Receiver<CloseThreadNotificiation>,
+    ui_rx: Receiver<pomodoro::State>,
+    events_tx: Sender<Event>,
+    close_rx: Receiver<CloseThreadNotificiation>,
 ) -> Result<(), AppError> {
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
@@ -43,11 +43,11 @@ pub fn ui_thread(
             Ok(_) => {
                 break;
             }
-            Err(error @ mpsc::TryRecvError::Disconnected) => {
+            Err(error @ TryRecvError::Disconnected) => {
                 return_val = Err(AppError::from(error));
                 break;
             }
-            Err(mpsc::TryRecvError::Empty) => {}
+            Err(TryRecvError::Empty) => {}
         }
 
         // TODO: handle hangup

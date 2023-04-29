@@ -2,7 +2,7 @@ use crate::args::{Args, Parser};
 use std::fmt::Display;
 use std::io;
 use std::ops::Deref;
-use std::sync::mpsc;
+use crossbeam::channel::{unbounded, RecvError, TryRecvError, SendError, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -37,9 +37,9 @@ fn run_local_session(
 
     let timer_update_interval = Duration::from_millis(50);
 
-    let (events_tx, events_rx) = mpsc::channel::<ui::Event>();
-    let (ui_tx, ui_rx) = mpsc::channel::<pomodoro::State>();
-    let (close_ui_tx, close_ui_rx) = mpsc::channel::<CloseThreadNotificiation>();
+    let (events_tx, events_rx) = unbounded::<ui::Event>();
+    let (ui_tx, ui_rx) = unbounded::<pomodoro::State>();
+    let (close_ui_tx, close_ui_rx) = unbounded::<CloseThreadNotificiation>();
 
     let mut thread_handles = Vec::new();
 
@@ -65,11 +65,11 @@ pub struct CloseThreadNotificiation;
 
 pub enum AppError {
     Io(io::Error),
-    ChannelRecv(mpsc::RecvError),
-    ChannelTryRecv(mpsc::TryRecvError),
-    ChannelSendPomodoroState(mpsc::SendError<pomodoro::State>),
-    ChannelSendUiEvent(mpsc::SendError<ui::Event>),
-    ChannelSendCloseNotification(mpsc::SendError<CloseThreadNotificiation>),
+    ChannelRecv(RecvError),
+    ChannelTryRecv(TryRecvError),
+    ChannelSendPomodoroState(SendError<pomodoro::State>),
+    ChannelSendUiEvent(SendError<ui::Event>),
+    ChannelSendCloseNotification(SendError<CloseThreadNotificiation>),
 }
 
 impl From<io::Error> for AppError {
@@ -78,32 +78,32 @@ impl From<io::Error> for AppError {
     }
 }
 
-impl From<mpsc::RecvError> for AppError {
-    fn from(error: mpsc::RecvError) -> Self {
+impl From<RecvError> for AppError {
+    fn from(error: RecvError) -> Self {
         AppError::ChannelRecv(error)
     }
 }
 
-impl From<mpsc::TryRecvError> for AppError {
-    fn from(error: mpsc::TryRecvError) -> Self {
+impl From<TryRecvError> for AppError {
+    fn from(error: TryRecvError) -> Self {
         AppError::ChannelTryRecv(error)
     }
 }
 
-impl From<mpsc::SendError<pomodoro::State>> for AppError {
-    fn from(error: mpsc::SendError<pomodoro::State>) -> Self {
+impl From<SendError<pomodoro::State>> for AppError {
+    fn from(error: SendError<pomodoro::State>) -> Self {
         AppError::ChannelSendPomodoroState(error)
     }
 }
 
-impl From<mpsc::SendError<ui::Event>> for AppError {
-    fn from(error: mpsc::SendError<ui::Event>) -> Self {
+impl From<SendError<ui::Event>> for AppError {
+    fn from(error: SendError<ui::Event>) -> Self {
         AppError::ChannelSendUiEvent(error)
     }
 }
 
-impl From<mpsc::SendError<CloseThreadNotificiation>> for AppError {
-    fn from(error: mpsc::SendError<CloseThreadNotificiation>) -> Self {
+impl From<SendError<CloseThreadNotificiation>> for AppError {
+    fn from(error: SendError<CloseThreadNotificiation>) -> Self {
         AppError::ChannelSendCloseNotification(error)
     }
 }
@@ -131,9 +131,9 @@ impl Display for AppError {
 fn state_transformer_thread(
     mut state: pomodoro::State,
     timer_update_interval: Duration,
-    events_rx: mpsc::Receiver<ui::Event>,
-    ui_tx: mpsc::Sender<pomodoro::State>,
-    close_ui_tx: mpsc::Sender<CloseThreadNotificiation>,
+    events_rx: Receiver<ui::Event>,
+    ui_tx: Sender<pomodoro::State>,
+    close_ui_tx: Sender<CloseThreadNotificiation>,
 ) -> Result<(), AppError> {
     loop {
         let now = Instant::now();
