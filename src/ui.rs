@@ -1,9 +1,10 @@
+use crate::animations;
 use crate::pomodoro;
 use crate::{AppError, CloseThreadNotificiation};
+use crossbeam::{select, channel::{tick, Receiver, Sender}};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyModifiers, MouseEventKind};
 use std::io;
-use crossbeam::channel::{TryRecvError, Receiver, Sender};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -11,12 +12,7 @@ use tui::{
     text::{Span, Spans},
     widgets, Frame, Terminal,
 };
-use crate::animations;
 
-// TODO: Let each ui update be the result of an event from the pomodoro thread,
-// and from a separate thread that handles user input.
-// It is too resource-hungry to draw to the terminal in a pre-determined interval,
-// if it is to be short enough to feel responsive.
 pub fn ui_thread(
     ui_rx: Receiver<pomodoro::State>,
     events_tx: Sender<Event>,
@@ -32,42 +28,41 @@ pub fn ui_thread(
         crossterm::event::EnableMouseCapture
     )?;
 
-    let update_interval = std::time::Duration::from_millis(50);
+    let crossterm_poll_interval = Duration::from_millis(20);
+    let crossterm_poll_ticker_rx = tick(crossterm_poll_interval);
 
-    let mut return_val = Ok(());
+    let return_val;
     let mut state: Option<pomodoro::State> = None;
     loop {
-        let now = Instant::now();
-
-        match close_rx.try_recv() {
-            Ok(_) => {
-                break;
-            }
-            Err(error @ TryRecvError::Disconnected) => {
-                return_val = Err(AppError::from(error));
-                break;
-            }
-            Err(TryRecvError::Empty) => {}
-        }
-
-        // TODO: handle hangup
-        if let Some(new_state) = ui_rx.try_iter().last() {
-            state = Some(new_state);
-        }
-        // let ui_state = ...; // for highlighting current setting selection, etc.
-
-        let mut layout = ApproximateLayout::default();
-
         terminal.draw(|f| {
-            layout = draw_ui(f, &state);
+            draw_ui(f, &state);
         })?;
 
-        for event in try_read_crossterm_events(10, &layout)? {
-            events_tx.send(event)?;
-        }
-
-        if now.elapsed() < update_interval {
-            std::thread::sleep(update_interval - now.elapsed());
+        select! {
+            recv(close_rx) -> close => {
+                match close {
+                    Ok(_) => return_val = Ok(()),
+                    Err(error) => return_val = Err(AppError::from(error)),
+                }
+                break;
+            }
+            recv(ui_rx) -> new_state => {
+                match new_state {
+                    Ok(new_state) => state = Some(new_state),
+                    Err(error) => {
+                        return_val = Err(AppError::from(error));
+                        break;
+                    },
+                }
+            }
+            recv(crossterm_poll_ticker_rx) -> instant => {
+                instant?;
+                for crossterm_event in try_read_crossterm_events(10)? {
+                    if let Ok(event) = Event::try_from(crossterm_event) {
+                        events_tx.send(event)?;
+                    }
+                }
+            }
         }
     }
 
@@ -252,26 +247,17 @@ impl TryFrom<CrosstermEvent> for Event {
     }
 }
 
-fn try_read_crossterm_events(
-    max_events: u32,
-    layout: &ApproximateLayout,
-) -> io::Result<Vec<Event>> {
-    let mut translated_events = vec![];
+fn try_read_crossterm_events(max_events: u32) -> Result<Vec<CrosstermEvent>, io::Error> {
+    let mut events = vec![];
+    let mut events_read = 0;
 
-    let mut i = 0;
     while crossterm::event::poll(Duration::from_secs(0))? {
-        if i == max_events {
+        if events_read == max_events {
             break;
         }
-
-        let event = crossterm::event::read()?;
-
-        if let Ok(translated_event) = Event::try_from(event) {
-            translated_events.push(translated_event);
-        }
-
-        i += 1;
+        events.push(crossterm::event::read()?);
+        events_read += 1;
     }
 
-    Ok(translated_events)
+    Ok(events)
 }
