@@ -1,117 +1,5 @@
 use unicode_segmentation::UnicodeSegmentation;
 
-pub fn _partial_unicode_circle(percentage: f64) -> String {
-    let percentage = percentage.max(0.0).min(1.0);
-
-    const WHOLE_CIRCLE: &str = "            ▄▄▄▄▄▄▄
-       ▄▄▀▀▀       ▀▀▀▄▄
-     ▄▀                 ▀▄
-   ▄▀                     ▀▄
-  █                         █
- █                           █
-▄▀                           ▀▄
-█                             █
-█                             █
- █                           █
- ▀▄                         ▄▀
-  ▀▄                       ▄▀
-    ▀▄                   ▄▀
-      ▀▄▄             ▄▄▀
-         ▀▀▀▄▄▄▄▄▄▄▀▀▀";
-
-    const GRAPHEME_REPLACEMENTS: [(usize, &str); 80] = [
-        (15, "▗"),
-        (14, " "),
-        (13, " "),
-        (12, " "),
-        (31, " "),
-        (30, " "),
-        (29, " "),
-        (28, " "),
-        (27, " "),
-        (51, " "),
-        (50, " "),
-        (76, " "),
-        (75, " "),
-        (103, "▄"),
-        (103, " "),
-        (132, "▄"),
-        (132, " "),
-        (163, " "),
-        (162, " "),
-        (194, "▄"),
-        (194, " "),
-        (226, "▄"),
-        (226, " "),
-        (259, "▄"),
-        (259, " "),
-        (290, " "),
-        (291, " "),
-        (322, " "),
-        (323, " "),
-        (354, " "),
-        (355, " "),
-        (384, " "),
-        (385, " "),
-        (386, " "),
-        (413, " "),
-        (414, " "),
-        (415, " "),
-        (416, " "),
-        (417, " "),
-        (418, " "),
-        (419, " "),
-        (420, " "),
-        (421, " "),
-        (422, " "),
-        (423, " "),
-        (424, " "),
-        (425, " "),
-        (400, " "),
-        (401, " "),
-        (402, " "),
-        (375, " "),
-        (376, " "),
-        (347, " "),
-        (348, " "),
-        (317, " "),
-        (318, " "),
-        (287, "▀"),
-        (287, " "),
-        (256, "▀"),
-        (256, " "),
-        (224, "▀"),
-        (224, " "),
-        (192, " "),
-        (191, " "),
-        (160, "▀"),
-        (160, " "),
-        (129, "▀"),
-        (129, " "),
-        (99, " "),
-        (98, " "),
-        (70, " "),
-        (69, " "),
-        (43, " "),
-        (42, " "),
-        (41, " "),
-        (40, " "),
-        (39, " "),
-        (18, " "),
-        (17, " "),
-        (16, " "),
-    ];
-
-    let take_n = (GRAPHEME_REPLACEMENTS.len() as f64 * percentage) as usize;
-    let mut graphemes: Vec<&str> = WHOLE_CIRCLE.graphemes(true).collect();
-
-    for (replace_i, replace_s) in GRAPHEME_REPLACEMENTS.iter().take(take_n) {
-        graphemes[*replace_i] = replace_s;
-    }
-
-    graphemes.into_iter().collect()
-}
-
 pub fn partial_box(percentage: f64) -> String {
     let percentage = percentage.max(0.0).min(1.0);
 
@@ -131,7 +19,7 @@ pub fn partial_box(percentage: f64) -> String {
     const BOX_HEIGHT: usize = 11;
     const N_BOX_ELEMENTS: usize = 60;
 
-    let draw_n_bars = (N_BOX_ELEMENTS as f64 * percentage) as usize;
+    let draw_n_bars = (N_BOX_ELEMENTS as f64 * percentage).ceil() as usize;
     let skip_n_bars = N_BOX_ELEMENTS - draw_n_bars;
     let mut grapheme_matrix: Vec<Vec<&str>> = WHOLE_BOX
         .lines()
