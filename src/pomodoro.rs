@@ -105,6 +105,10 @@ impl State {
         self.progress.as_secs_f64() / self.current_activity_duration().as_secs_f64()
     }
 
+    pub fn current_activity(&self) -> Activity {
+        self.activity
+    }
+
     fn current_activity_duration(&self) -> SessionDuration {
         match self.current_activity_duration_override {
             Some(duration) => duration,
@@ -143,7 +147,7 @@ impl Display for State {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Activity {
     Focus,
     ShortBreak,
@@ -151,8 +155,18 @@ pub enum Activity {
 }
 
 impl Activity {
-    fn is_focus(&self) -> bool {
+    pub fn is_focus(&self) -> bool {
         matches!(self, Activity::Focus)
+    }
+    pub fn is_short_break(&self) -> bool {
+        matches!(self, Activity::ShortBreak)
+    }
+    pub fn is_long_break(&self) -> bool {
+        matches!(self, Activity::LongBreak)
+    }
+
+    pub fn is_break(&self) -> bool {
+        self.is_short_break() || self.is_long_break()
     }
 }
 

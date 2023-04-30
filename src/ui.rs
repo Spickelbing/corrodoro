@@ -1,7 +1,10 @@
 use crate::animations;
 use crate::pomodoro;
 use crate::{AppError, CloseThreadNotificiation};
-use crossbeam::{select, channel::{tick, Receiver, Sender}};
+use crossbeam::{
+    channel::{tick, Receiver, Sender},
+    select,
+};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyModifiers, MouseEventKind};
 use std::io;
 use std::time::Duration;
@@ -12,6 +15,7 @@ use tui::{
     text::{Span, Spans},
     widgets, Frame, Terminal,
 };
+use notify_rust::error::Error as NotificationError;
 
 pub fn ui_thread(
     ui_rx: Receiver<pomodoro::State>,
@@ -48,11 +52,18 @@ pub fn ui_thread(
             }
             recv(ui_rx) -> new_state => {
                 match new_state {
-                    Ok(new_state) => state = Some(new_state),
+                    Ok(new_state) => {
+                        if let Some(state) = state {
+                            if state.current_activity() != new_state.current_activity() {
+                                show_notification(state.current_activity()); // TODO: handle error
+                            }
+                        }
+                        state = Some(new_state);
+                    }
                     Err(error) => {
                         return_val = Err(AppError::from(error));
                         break;
-                    },
+                    }
                 }
             }
             recv(crossterm_poll_ticker_rx) -> instant => {
@@ -74,6 +85,23 @@ pub fn ui_thread(
     crossterm::terminal::disable_raw_mode()?;
 
     return_val
+}
+
+fn show_notification(activity: pomodoro::Activity) -> Result<(), NotificationError> {
+    let message : &'static str = match activity {
+        pomodoro::Activity::Focus => "focus",
+        pomodoro::Activity::ShortBreak => "short break",
+        pomodoro::Activity::LongBreak => "long break",
+    };
+    let notification = notify_rust::Notification::new()
+        .summary("Pomodoro")
+        .body(message)
+        .show();
+
+    if matches!(notification, Err(_)) {
+        notification?;
+    }
+    Ok(())
 }
 
 #[derive(Default)]
