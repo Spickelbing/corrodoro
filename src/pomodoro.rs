@@ -93,9 +93,9 @@ impl State {
         }
     }
 
-    /// Does nothing if the reducement in duration would lead to a negative duration.
+    /// Does nothing if the reducement in duration would yield 0 or lead to a negative duration.
     pub fn reduce_activity(&mut self, duration: &Duration) {
-        if *self.time_remaining() >= *duration {
+        if *self.time_remaining() > *duration {
             self.current_activity_duration_override =
                 Some((*self.current_activity_duration() - *duration).into());
         }
