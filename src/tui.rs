@@ -103,6 +103,8 @@ pub struct DisplayData {
     pub activity_name: String,
     pub progress_percentage: f64,
     pub is_paused: bool,
+    pub completed_focus_sessions: u32,
+    pub currently_in_focus_session: bool,
 }
 
 #[derive(Debug)]
@@ -184,14 +186,36 @@ fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &Dis
         timer_clock_sub_chunk = horizontal_sub_chunks[1];
     }
 
+    let timer_text;
+    {
+        let n_highlighted_indicators: usize = display_data.completed_focus_sessions as usize % 4
+            + if display_data.currently_in_focus_session {
+                1
+            } else {
+                0
+            }
+            + if display_data.completed_focus_sessions % 4 == 0 && !display_data.currently_in_focus_session {
+                4
+            } else {
+                0
+            };
+        timer_text = format!(
+            "{}\n{}\n{} {}",
+            animations::completed_sessions_counter(n_highlighted_indicators, 4),
+            display_data.timer_text,
+            display_data.activity_name,
+            if display_data.is_paused { "▶" } else { "⏸" }
+        );
+    }
+
     let timer_text_sub_chunk;
     {
-        let text_height = 2; // TODO: make this dynamic
-        let ceil_padding = timer_clock_sub_chunk.height / 2;
+        let text_height = timer_text.lines().count() as u16;
+        let ceil_padding = (timer_clock_sub_chunk.height / 2).saturating_sub(text_height / 2);
         let floor_padding = timer_clock_sub_chunk
             .height
             .saturating_sub(ceil_padding)
-            .saturating_sub(text_height);
+            .saturating_sub(text_height / 2);
         let vertical_sub_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -222,12 +246,6 @@ fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &Dis
         ]));
     }
 
-    let timer_text = format!(
-        "{}\n{} {}",
-        display_data.timer_text,
-        display_data.activity_name,
-        if display_data.is_paused { "▶" } else { "⏸" }
-    );
     let widget_timer_text = widgets::Paragraph::new(timer_text).alignment(Alignment::Center);
 
     let widget_clock_animation;
@@ -243,7 +261,17 @@ fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &Dis
 }
 
 mod animations {
+    use itertools::intersperse;
     use unicode_segmentation::UnicodeSegmentation;
+
+    pub fn completed_sessions_counter(
+        n_highlighted_indicators: usize,
+        n_indicators: usize,
+    ) -> String {
+        let counter = "▢".repeat(n_highlighted_indicators)
+            + &"-".repeat(n_indicators.saturating_sub(n_highlighted_indicators));
+        intersperse(counter.graphemes(true), " ").collect()
+    }
 
     pub fn partial_box(percentage: f64) -> String {
         let percentage = percentage.max(0.0).min(1.0);
@@ -353,6 +381,8 @@ impl From<&PomodoroState> for DisplayData {
             progress_percentage: state.progress_percentage(),
             timer_text: state.time_remaining().to_string(),
             is_paused: !state.timer_is_active(),
+            completed_focus_sessions: state.completed_focus_sessions(),
+            currently_in_focus_session: state.current_activity().is_focus(),
         }
     }
 }

@@ -8,7 +8,7 @@ use std::time::Duration;
 pub struct State {
     activity: Activity,
     progress: SessionDuration,
-    num_focus_sessions: u32,
+    completed_focus_sessions: u32,
     timer_is_active: bool,
     settings: Settings,
     current_activity_duration_override: Option<SessionDuration>,
@@ -19,7 +19,7 @@ impl State {
         State {
             activity: Activity::Focus,
             progress: SessionDuration(Duration::from_secs(0)),
-            num_focus_sessions: 0,
+            completed_focus_sessions: 0,
             timer_is_active: settings.start_automatically,
             settings,
             current_activity_duration_override: None,
@@ -43,7 +43,7 @@ impl State {
             self.current_activity_duration_override = None;
 
             if self.activity.is_focus() {
-                self.num_focus_sessions += 1;
+                self.completed_focus_sessions += 1;
             }
 
             self.activity = self.next_activity();
@@ -74,7 +74,7 @@ impl State {
         self.progress = Duration::from_secs(0).into();
         self.current_activity_duration_override = None;
         if self.activity.is_focus() {
-            self.num_focus_sessions += 1;
+            self.completed_focus_sessions += 1;
         }
 
         if self.settings.start_automatically {
@@ -109,6 +109,10 @@ impl State {
         self.activity
     }
 
+    pub fn completed_focus_sessions(&self) -> u32 {
+        self.completed_focus_sessions
+    }
+
     fn current_activity_duration(&self) -> SessionDuration {
         match self.current_activity_duration_override {
             Some(duration) => duration,
@@ -123,7 +127,7 @@ impl State {
     fn next_activity(&self) -> Activity {
         match self.activity {
             Activity::Focus => {
-                if self.num_focus_sessions % 4 == 0 {
+                if self.completed_focus_sessions % 4 == 0 {
                     Activity::LongBreak
                 } else {
                     Activity::ShortBreak
