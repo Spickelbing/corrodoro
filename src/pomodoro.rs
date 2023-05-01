@@ -158,16 +158,6 @@ impl Activity {
     pub fn is_focus(&self) -> bool {
         matches!(self, Activity::Focus)
     }
-    pub fn is_short_break(&self) -> bool {
-        matches!(self, Activity::ShortBreak)
-    }
-    pub fn is_long_break(&self) -> bool {
-        matches!(self, Activity::LongBreak)
-    }
-
-    pub fn is_break(&self) -> bool {
-        self.is_short_break() || self.is_long_break()
-    }
 }
 
 impl Display for Activity {
