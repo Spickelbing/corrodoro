@@ -230,8 +230,7 @@ fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &Dis
     let (_widget_settings_block, widget_timer_block);
     {
         let base_block = widgets::Block::default()
-            .borders(widgets::Borders::ALL)
-            .style(Style::default().bg(Color::Black));
+            .borders(widgets::Borders::ALL);
         let title_text_initial_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
         let title_text_base_style = Style::default()
             .fg(Color::White)
