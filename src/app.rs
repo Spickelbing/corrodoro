@@ -6,9 +6,9 @@ use crossbeam::{
     channel::{after, tick, unbounded, Receiver, RecvError, SendError, Sender, TryRecvError},
     select,
 };
-use std::fmt::Display;
 use std::ops::Deref;
 use std::time::{Duration, Instant};
+use thiserror::Error;
 
 pub struct App {
     pomodoro_state: pomodoro::State,
@@ -122,46 +122,14 @@ impl Deref for AppShouldQuit {
 }
 
 /// Represents errors the app has no control over. They are unrecoverable.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum AppError {
-    ChannelRecv(RecvError),
-    ChannelTryRecv(TryRecvError),
-    ChannelSendEvent(SendError<Event>),
-    TuiError(TuiError),
-}
-
-impl From<RecvError> for AppError {
-    fn from(error: RecvError) -> Self {
-        AppError::ChannelRecv(error)
-    }
-}
-
-impl From<TryRecvError> for AppError {
-    fn from(error: TryRecvError) -> Self {
-        AppError::ChannelTryRecv(error)
-    }
-}
-
-impl From<SendError<Event>> for AppError {
-    fn from(error: SendError<Event>) -> Self {
-        AppError::ChannelSendEvent(error)
-    }
-}
-
-impl From<TuiError> for AppError {
-    fn from(error: TuiError) -> Self {
-        AppError::TuiError(error)
-    }
-}
-
-impl Display for AppError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let inner_error = match self {
-            AppError::ChannelRecv(error) => error.to_string(),
-            AppError::ChannelTryRecv(error) => error.to_string(),
-            AppError::ChannelSendEvent(error) => error.to_string(),
-            AppError::TuiError(error) => error.to_string(),
-        };
-        write!(f, "unrecoverable error: {inner_error}")
-    }
+    #[error("failed to receive from a channel: {0}")]
+    ChannelRecv(#[from] RecvError),
+    #[error("failed to try-receive from a channel: {0}")]
+    ChannelTryRecv(#[from] TryRecvError),
+    #[error("failed to send an event on a channel: {0}")]
+    ChannelSendEvent(#[from] SendError<Event>),
+    #[error("unrecoverable tui error: {0}")]
+    TuiError(#[from] TuiError),
 }

@@ -1,8 +1,8 @@
-use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::time::Duration;
+use thiserror::Error;
 
 #[derive(Clone)]
 pub struct State {
@@ -205,34 +205,17 @@ impl From<Duration> for SessionDuration {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ParseSessionDurationError {
+    #[error("expected \"minutes\" or \"minutes:seconds\"")]
     InvalidFormat,
+    #[error("seconds must be less than 60")]
     TooManySeconds,
+    #[error("seconds must be two digits")]
     NotTwoDigitsForSeconds,
-    ParseIntError(std::num::ParseIntError),
+    #[error("failed to parse integer: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
 }
-
-impl Display for ParseSessionDurationError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParseSessionDurationError::InvalidFormat => {
-                write!(f, "expected \"minutes\" or \"minutes:seconds\"")
-            }
-            ParseSessionDurationError::TooManySeconds => {
-                write!(f, "seconds must be less than 60")
-            }
-            ParseSessionDurationError::ParseIntError(e) => {
-                write!(f, "failed to parse integer: {e}")
-            }
-            ParseSessionDurationError::NotTwoDigitsForSeconds => {
-                write!(f, "seconds must be two digits")
-            }
-        }
-    }
-}
-
-impl Error for ParseSessionDurationError {}
 
 impl FromStr for SessionDuration {
     type Err = ParseSessionDurationError;

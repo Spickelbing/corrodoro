@@ -1,11 +1,9 @@
 use crate::event::{Event, EventConversionUndefinedError};
 use crate::pomodoro::State as PomodoroState;
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyModifiers, MouseEventKind};
-use std::error::Error;
-use std::fmt;
-use std::fmt::Display;
 use std::io;
 use std::time::Duration;
+use thiserror::Error;
 use tui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
@@ -107,36 +105,19 @@ pub struct DisplayData {
     pub currently_in_focus_session: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum TuiError {
+    #[error("failed to initialize terminal ui: {0}")]
     Creation(io::Error),
+    #[error("failed to toggle terminal raw mode: {0}")]
     RawModeToggle(io::Error),
+    #[error("failed to toggle alternate terminal screen: {0}")]
     AlternateScreenToggle(io::Error),
+    #[error("failed to render terminal ui: {0}")]
     Rendering(io::Error),
+    #[error("failed to read input event from terminal: {0}")]
     ReadInputEvent(io::Error),
 }
-
-impl Display for TuiError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TuiError::Creation(error) => {
-                write!(f, "failed to initialize terminal ui: {error}")
-            }
-            TuiError::RawModeToggle(error) => {
-                write!(f, "failed to toggle terminal raw mode: {error}")
-            }
-            TuiError::AlternateScreenToggle(error) => {
-                write!(f, "failed to toggle alternate terminal screen: {error}")
-            }
-            TuiError::Rendering(error) => write!(f, "failed to render terminal ui: {error}"),
-            TuiError::ReadInputEvent(error) => {
-                write!(f, "failed to read input event from terminal: {error}")
-            }
-        }
-    }
-}
-
-impl Error for TuiError {}
 
 fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &DisplayData) {
     let (_settings_chunk, timer_chunk);
@@ -194,7 +175,9 @@ fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &Dis
             } else {
                 0
             }
-            + if display_data.completed_focus_sessions % 4 == 0 && !display_data.currently_in_focus_session {
+            + if display_data.completed_focus_sessions % 4 == 0
+                && !display_data.currently_in_focus_session
+            {
                 4
             } else {
                 0
@@ -229,8 +212,7 @@ fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &Dis
 
     let (_widget_settings_block, widget_timer_block);
     {
-        let base_block = widgets::Block::default()
-            .borders(widgets::Borders::ALL);
+        let base_block = widgets::Block::default().borders(widgets::Borders::ALL);
         let title_text_initial_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
         let title_text_base_style = Style::default()
             .fg(Color::White)
