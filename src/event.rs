@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+/// These are the events that can be sent to the app, either from a UI or via network.
 pub enum Event {
     Quit,
     ToggleTimer,
@@ -8,5 +9,3 @@ pub enum Event {
     ExtendActivity(Duration),
     ReduceActivity(Duration),
 }
-
-pub struct EventConversionUndefinedError;

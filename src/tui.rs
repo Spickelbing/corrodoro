@@ -1,4 +1,4 @@
-use crate::event::{Event, EventConversionUndefinedError};
+use crate::event::Event;
 use crate::pomodoro::State as PomodoroState;
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyModifiers, MouseEventKind};
 use std::io;
@@ -320,6 +320,8 @@ mod animations {
         result
     }
 }
+
+pub struct EventConversionUndefinedError;
 
 impl TryFrom<CrosstermEvent> for Event {
     type Error = EventConversionUndefinedError;
