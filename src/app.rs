@@ -82,8 +82,8 @@ impl App {
     }
 
     fn show_desktop_notification(&self) {
-        // TODO: handle error
-        notification::show_desktop_notification(
+        // ignore errors for now, shouldn't crash but also don't know how to handle
+        let _ = notification::show_desktop_notification(
             "",
             &self.pomodoro_state.current_activity().to_string(),
         );

@@ -1342,6 +1342,7 @@ dependencies = [
  "itertools",
  "notify-rust",
  "rodio",
+ "thiserror",
  "tui",
  "unicode-segmentation",
 ]
