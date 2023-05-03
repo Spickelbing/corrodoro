@@ -8,16 +8,17 @@ mod notification;
 mod pomodoro;
 mod tui;
 
-fn main() -> Result<(), AppError> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), AppError> {
     let args = Args::parse();
 
     match args.command {
-        args::Command::Local { work, short, long } => run_local_session(work, short, long),
+        args::Command::Local { work, short, long } => run_local_session(work, short, long).await,
         _ => todo!(),
     }
 }
 
-fn run_local_session(
+async fn run_local_session(
     work: pomodoro::SessionDuration,
     short: pomodoro::SessionDuration,
     long: pomodoro::SessionDuration,
@@ -29,7 +30,7 @@ fn run_local_session(
         start_automatically: false,
     }))?;
 
-    app.run()?;
+    app.run().await?;
 
     Ok(())
 }

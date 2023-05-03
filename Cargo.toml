@@ -7,11 +7,12 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.2.4", features = ["derive"] }
-crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
-crossterm = "0.26.1"
+crossterm = { version = "0.26.1", features = ["event-stream"] }
+futures = "0.3.28"
 itertools = "0.10.5"
 notify-rust = "4.8.0"
 rodio = "0.17.1"
 thiserror = "1.0.40"
+tokio = { version = "1.28.0", features = ["full"] }
 tui = "0.19.0"
 unicode-segmentation = "1.10.1"

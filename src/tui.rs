@@ -1,6 +1,9 @@
 use crate::event::Event;
 use crate::pomodoro::State as PomodoroState;
-use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyModifiers, MouseEventKind};
+use crossterm::event::{
+    Event as CrosstermEvent, EventStream, KeyCode, KeyModifiers, MouseEventKind,
+};
+use futures::StreamExt;
 use std::io;
 use std::time::Duration;
 use thiserror::Error;
@@ -16,6 +19,7 @@ pub struct Tui {
     terminal: Terminal<CrosstermBackend<io::Stdout>>,
     raw_mode_enabled: bool,
     alternate_screen_enabled: bool,
+    event_stream: EventStream,
 }
 
 impl Tui {
@@ -26,6 +30,7 @@ impl Tui {
             terminal: Terminal::new(backend).map_err(TuiError::Creation)?,
             alternate_screen_enabled: false,
             raw_mode_enabled: false,
+            event_stream: EventStream::new(),
         })
     }
 
@@ -74,27 +79,22 @@ impl Tui {
         Ok(())
     }
 
-    pub fn try_read_events(&self, max_events: u32) -> Result<Vec<Event>, TuiError> {
-        let crossterm_events = self.try_read_crossterm_events(max_events)?;
-        Ok(crossterm_events
-            .into_iter()
-            .filter_map(|e| e.try_into().ok())
-            .collect())
+    pub async fn read_event(&mut self) -> Result<Event, TuiError> {
+        loop {
+            let crossterm_event = self.read_crossterm_event().await?;
+            if let Ok(event) = Event::try_from(crossterm_event) {
+                return Ok(event);
+            }
+        }
     }
 
-    fn try_read_crossterm_events(&self, max_events: u32) -> Result<Vec<CrosstermEvent>, TuiError> {
-        let mut events = vec![];
-        let mut events_read = 0;
+    async fn read_crossterm_event(&mut self) -> Result<CrosstermEvent, TuiError> {
+        let event = self.event_stream.next().await;
+        let event = event
+            .ok_or(TuiError::EventStreamClosed)?
+            .map_err(TuiError::ReadInputEvent)?;
 
-        while crossterm::event::poll(Duration::from_secs(0)).map_err(TuiError::ReadInputEvent)? {
-            if events_read == max_events {
-                break;
-            }
-            events.push(crossterm::event::read().map_err(TuiError::ReadInputEvent)?);
-            events_read += 1;
-        }
-
-        Ok(events)
+        Ok(event)
     }
 }
 
@@ -119,6 +119,8 @@ pub enum TuiError {
     Rendering(io::Error),
     #[error("failed to read input event from terminal: {0}")]
     ReadInputEvent(io::Error),
+    #[error("terminal input event stream was closed unexpectedly")]
+    EventStreamClosed,
 }
 
 fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &DisplayData) {
