@@ -38,7 +38,8 @@ impl Tui {
         crossterm::execute!(
             self.terminal.backend_mut(),
             crossterm::terminal::EnterAlternateScreen,
-            crossterm::event::EnableMouseCapture
+            crossterm::event::EnableMouseCapture,
+            crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
         )
         .map_err(TuiError::AlternateScreenToggle)?;
         self.alternate_screen_enabled = true;
@@ -50,6 +51,7 @@ impl Tui {
         if self.alternate_screen_enabled {
             crossterm::execute!(
                 self.terminal.backend_mut(),
+                crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
                 crossterm::terminal::LeaveAlternateScreen,
                 crossterm::event::DisableMouseCapture,
             )
