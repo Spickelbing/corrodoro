@@ -122,17 +122,16 @@ pub enum TuiError {
 }
 
 fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &DisplayData) {
-    let (_settings_chunk, timer_chunk);
-    {
+    let (_settings_chunk, timer_chunk) = {
         let toplevel_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(0), Constraint::Percentage(80)])
             .split(frame.size());
-        (_settings_chunk, timer_chunk) = (toplevel_chunks[0], toplevel_chunks[1]);
-    }
 
-    let timer_clock_sub_chunk;
-    {
+        (toplevel_chunks[0], toplevel_chunks[1])
+    };
+
+    let timer_clock_sub_chunk = {
         let (clock_width, clock_height) = (21, 11); // TODO: make dimensions dynamic
         let (left_padding, right_padding);
         {
@@ -166,35 +165,29 @@ fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &Dis
                 Constraint::Length(right_padding),
             ])
             .split(vertically_centered_sub_chunk);
-        timer_clock_sub_chunk = horizontal_sub_chunks[1];
-    }
 
-    let timer_text;
-    {
+        horizontal_sub_chunks[1]
+    };
+
+    let timer_text = {
+        let is_fourth_session = display_data.completed_focus_sessions % 4 == 0;
         let n_highlighted_indicators: usize = display_data.completed_focus_sessions as usize % 4
-            + if display_data.currently_in_focus_session {
-                1
-            } else {
-                0
-            }
-            + if display_data.completed_focus_sessions % 4 == 0
-                && !display_data.currently_in_focus_session
-            {
-                4
-            } else {
-                0
+            + match (display_data.currently_in_focus_session, is_fourth_session) {
+                (true, _) => 1,
+                (false, true) => 4,
+                _ => 0,
             };
-        timer_text = format!(
+
+        format!(
             "{}\n{}\n{} {}",
             animations::completed_sessions_counter(n_highlighted_indicators, 4),
             display_data.timer_text,
             display_data.activity_name,
             if display_data.is_paused { "▶" } else { "⏸" }
-        );
-    }
+        )
+    };
 
-    let timer_text_sub_chunk;
-    {
+    let timer_text_sub_chunk = {
         let text_height = timer_text.lines().count() as u16;
         let ceil_padding = (timer_clock_sub_chunk.height / 2).saturating_sub(text_height / 2);
         let floor_padding = timer_clock_sub_chunk
@@ -209,33 +202,36 @@ fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &Dis
                 Constraint::Length(floor_padding),
             ])
             .split(timer_clock_sub_chunk);
-        timer_text_sub_chunk = vertical_sub_chunks[1];
-    }
 
-    let (_widget_settings_block, widget_timer_block);
-    {
+        vertical_sub_chunks[1]
+    };
+
+    let (_widget_settings_block, widget_timer_block) = {
         let base_block = widgets::Block::default().borders(widgets::Borders::ALL);
         let title_text_initial_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
         let title_text_base_style = Style::default()
             .fg(Color::White)
             .add_modifier(Modifier::BOLD);
-        _widget_settings_block = base_block.clone().title(Spans::from(vec![
-            Span::styled("s", title_text_initial_style),
-            Span::styled("ettings", title_text_base_style),
-        ]));
-        widget_timer_block = base_block.clone().title(Spans::from(vec![
-            Span::styled("t", title_text_initial_style),
-            Span::styled("imer", title_text_base_style),
-        ]));
-    }
+
+        (
+            base_block.clone().title(Spans::from(vec![
+                Span::styled("s", title_text_initial_style),
+                Span::styled("ettings", title_text_base_style),
+            ])),
+            base_block.clone().title(Spans::from(vec![
+                Span::styled("t", title_text_initial_style),
+                Span::styled("imer", title_text_base_style),
+            ])),
+        )
+    };
 
     let widget_timer_text = widgets::Paragraph::new(timer_text).alignment(Alignment::Center);
 
-    let widget_clock_animation;
-    {
+    let widget_clock_animation = {
         let partial_clock = animations::partial_box(1.0 - display_data.progress_percentage);
-        widget_clock_animation = widgets::Paragraph::new(partial_clock).alignment(Alignment::Left);
-    }
+
+        widgets::Paragraph::new(partial_clock).alignment(Alignment::Left)
+    };
 
     frame.render_widget(widget_clock_animation, timer_clock_sub_chunk);
     frame.render_widget(widget_timer_text, timer_text_sub_chunk);
