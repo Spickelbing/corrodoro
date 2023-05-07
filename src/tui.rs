@@ -1,7 +1,7 @@
 use crate::event::Event;
 use crate::pomodoro::State as PomodoroState;
 use crossterm::event::{
-    Event as CrosstermEvent, EventStream, KeyCode, KeyModifiers, MouseEventKind,
+    Event as CrosstermEvent, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
 };
 use futures::StreamExt;
 use std::io;
@@ -336,16 +336,21 @@ impl TryFrom<CrosstermEvent> for Event {
                     _ => None,
                 }
             }
-            CrosstermEvent::Key(key_event) => match key_event.code {
-                KeyCode::Char('q') => Some(Event::Quit),
-                KeyCode::Char('r') => Some(Event::ResetTimer),
-                KeyCode::Char('s') => Some(Event::SkipActivity),
-                KeyCode::Char(' ') => Some(Event::ToggleTimer),
-                KeyCode::Up => Some(Event::ExtendActivity(Duration::from_secs(60))),
-                KeyCode::Down => Some(Event::ReduceActivity(Duration::from_secs(60))),
-                KeyCode::Esc => Some(Event::Quit),
-                _ => None,
-            },
+            CrosstermEvent::Key(key_event)
+                if key_event.kind == KeyEventKind::Press
+                    || key_event.kind == KeyEventKind::Repeat =>
+            {
+                match key_event.code {
+                    KeyCode::Char('q') => Some(Event::Quit),
+                    KeyCode::Char('r') => Some(Event::ResetTimer),
+                    KeyCode::Char('s') => Some(Event::SkipActivity),
+                    KeyCode::Char(' ') => Some(Event::ToggleTimer),
+                    KeyCode::Up => Some(Event::ExtendActivity(Duration::from_secs(60))),
+                    KeyCode::Down => Some(Event::ReduceActivity(Duration::from_secs(60))),
+                    KeyCode::Esc => Some(Event::Quit),
+                    _ => None,
+                }
+            }
             CrosstermEvent::Mouse(mouse_event) => match mouse_event.kind {
                 MouseEventKind::ScrollUp => Some(Event::ExtendActivity(Duration::from_secs(60))),
                 MouseEventKind::ScrollDown => Some(Event::ReduceActivity(Duration::from_secs(60))),
