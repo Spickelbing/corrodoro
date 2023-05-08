@@ -1,10 +1,11 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::time::Duration;
 use thiserror::Error;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct State {
     activity: Activity,
     progress: SessionDuration,
@@ -151,7 +152,7 @@ impl Display for State {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Activity {
     Focus,
     ShortBreak,
@@ -174,7 +175,7 @@ impl Display for Activity {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub focus_duration: SessionDuration,
     pub short_break_duration: SessionDuration,
@@ -182,7 +183,7 @@ pub struct Settings {
     pub start_automatically: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionDuration(pub Duration);
 
 impl Deref for SessionDuration {
