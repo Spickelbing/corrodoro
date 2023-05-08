@@ -243,6 +243,7 @@ fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, display_data: &Dis
 
 mod animations {
     use itertools::intersperse;
+    use std::iter;
     use unicode_segmentation::UnicodeSegmentation;
 
     pub fn completed_sessions_counter(
@@ -281,30 +282,11 @@ mod animations {
             .collect();
 
         let mut path: Vec<(usize, usize)> = Vec::new();
-        path.extend(
-            [0usize]
-                .repeat(BOX_WIDTH / 2)
-                .into_iter()
-                .zip((0..BOX_WIDTH / 2).rev()),
-        );
-        path.extend((1..BOX_HEIGHT).zip([0].repeat(BOX_HEIGHT - 1)));
-        path.extend(
-            [BOX_HEIGHT - 1]
-                .repeat(BOX_WIDTH - 1)
-                .into_iter()
-                .zip(1..BOX_WIDTH),
-        );
-        path.extend(
-            (0..BOX_HEIGHT - 1)
-                .rev()
-                .zip([BOX_WIDTH - 1].repeat(BOX_HEIGHT - 1)),
-        );
-        path.extend(
-            [0].repeat(BOX_WIDTH - BOX_WIDTH / 2)
-                .into_iter()
-                .zip((BOX_WIDTH - BOX_WIDTH / 2 - 1)..(BOX_WIDTH - 1))
-                .rev(),
-        );
+        path.extend(iter::repeat(0).zip((0..BOX_WIDTH / 2).rev()));
+        path.extend((1..BOX_HEIGHT).zip(iter::repeat(0)));
+        path.extend(iter::repeat(BOX_HEIGHT - 1).zip(1..BOX_WIDTH));
+        path.extend((0..BOX_HEIGHT - 1).rev().zip(iter::repeat(BOX_WIDTH - 1)));
+        path.extend(iter::repeat(0).zip(((BOX_WIDTH - BOX_WIDTH / 2 - 1)..(BOX_WIDTH - 1)).rev()));
 
         for (row, col) in path.iter().take(skip_n_bars) {
             grapheme_matrix[*row][*col] = " ";
