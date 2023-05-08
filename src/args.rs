@@ -1,6 +1,7 @@
 use crate::pomodoro::SessionDuration;
 pub use clap::Parser;
 use clap::Subcommand;
+use std::net::SocketAddr;
 use std::time::Duration;
 
 #[derive(Parser)]
@@ -28,8 +29,8 @@ pub enum Command {
     },
 
     /// Attach to a session
-    Client,
+    Client { server_address: SocketAddr },
 
     /// Host a session
-    Server,
+    Server { port: u16 },
 }
