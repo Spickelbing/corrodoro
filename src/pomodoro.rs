@@ -183,6 +183,17 @@ pub struct Settings {
     pub start_automatically: bool,
 }
 
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            focus_duration: SessionDuration(Duration::from_secs(25 * 60)),
+            short_break_duration: SessionDuration(Duration::from_secs(5 * 60)),
+            long_break_duration: SessionDuration(Duration::from_secs(15 * 60)),
+            start_automatically: false,
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionDuration(pub Duration);
 
