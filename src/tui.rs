@@ -1,4 +1,5 @@
 use crate::app::{AppModeInfo, Event, UiData};
+use crate::notification;
 use crossterm::event::{
     Event as CrosstermEvent, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
 };
@@ -74,6 +75,11 @@ impl Tui {
                 render_ui(f, render_data);
             })
             .map_err(TuiError::Rendering)?;
+
+        if render_data.notify_end_of_activity {
+            // ignore errors for now, perhaps add a log message in the tui in the future
+            let _ = notification::show_desktop_notification("", &render_data.activity.to_string());
+        }
 
         Ok(())
     }

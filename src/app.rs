@@ -1,5 +1,4 @@
 use crate::app::net::{Message, NetworkError, RemoteServer, Server};
-use crate::notification;
 use crate::pomodoro;
 use crate::tui::{Tui, TuiError};
 use serde::{Deserialize, Serialize};
@@ -57,9 +56,13 @@ impl App {
         let mut pomodoro_clock = interval(Duration::from_millis(100));
         let mut pomodoro_start_time = Instant::now();
 
-        //let mut show_notification = false;
+        let mut notify_end_of_activity = false;
         loop {
             let ui_data = UiData::from(&*self);
+            let ui_data = UiData {
+                notify_end_of_activity,
+                ..ui_data
+            };
 
             self.tui.render(&ui_data)?;
 
@@ -75,6 +78,7 @@ impl App {
                 // ignore transmission errors for now
                 let _ = server.broadcast_message(message).await;
             }
+            notify_end_of_activity = false;
 
             select! {
                 _ = pomodoro_clock.tick() => {
@@ -86,7 +90,7 @@ impl App {
 
                         let activity_after = self.pomodoro_state.current_activity();
                         if activity_before != activity_after {
-                            self.show_desktop_notification();
+                            notify_end_of_activity = true;
                         }
                     }
                 }
@@ -135,14 +139,6 @@ impl App {
         }
 
         Ok(())
-    }
-
-    fn show_desktop_notification(&self) {
-        // ignore errors for now, shouldn't crash but also don't know how to handle
-        let _ = notification::show_desktop_notification(
-            "",
-            &self.pomodoro_state.current_activity().to_string(),
-        );
     }
 
     fn handle_event(
@@ -281,7 +277,7 @@ impl From<&App> for UiData {
             activity: app.pomodoro_state.current_activity(),
             progress_percentage: app.pomodoro_state.progress_percentage(),
             completed_focus_sessions: app.pomodoro_state.completed_focus_sessions(),
-            notify_end_of_activity: false, //todo!()
+            notify_end_of_activity: false,
             mode_info,
         }
     }
