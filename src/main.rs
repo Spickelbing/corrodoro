@@ -1,6 +1,7 @@
 use crate::app::{App, ClientApp, UnrecoverableError};
-use crate::args::{Args, Parser};
-use std::net::{Ipv4Addr, SocketAddr};
+use crate::args::{Args, IpVersion, Parser};
+use rand::{seq::IteratorRandom, thread_rng};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::process::ExitCode;
 
 mod app;
@@ -14,14 +15,20 @@ async fn main() -> ExitCode {
     let args = Args::parse();
 
     let result = match args.command {
-        args::Command::Offline { work, short, long } => run_local_session(work, short, long).await,
-        args::Command::Connect { server_address } => run_client_session(*server_address).await,
+        args::Command::Offline { work, short, long } => {
+            run_offline_session(work, short, long).await
+        }
+        args::Command::Connect {
+            server_address,
+            ip_version,
+        } => run_client_session(server_address.resolved(), ip_version).await,
         args::Command::Host {
             port,
+            ip_version,
             work,
             short,
             long,
-        } => run_server_session(port, work, short, long).await,
+        } => run_server_session(port, ip_version, work, short, long).await,
     };
 
     if let Err(err) = result {
@@ -32,7 +39,7 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn run_local_session(
+async fn run_offline_session(
     work: pomodoro::SessionDuration,
     short: pomodoro::SessionDuration,
     long: pomodoro::SessionDuration,
@@ -47,8 +54,32 @@ async fn run_local_session(
 }
 
 async fn run_client_session(
-    server_address: std::net::SocketAddr,
+    server_addresses: Vec<SocketAddr>,
+    ip_version: IpVersion,
 ) -> Result<(), UnrecoverableError> {
+    let version_filter = match ip_version {
+        IpVersion::V4 => |addr: &&SocketAddr| addr.is_ipv4(),
+        IpVersion::V6 => |addr: &&SocketAddr| addr.is_ipv6(),
+    };
+
+    let server_address = match server_addresses
+        .iter()
+        .filter(version_filter)
+        .choose(&mut thread_rng())
+    {
+        Some(random_addr) => *random_addr,
+        None => match server_addresses.len() {
+            0 => return Err(UnrecoverableError::HostHasNoDnsRecords),
+            _ => {
+                return Err(if ip_version.is_v4() {
+                    UnrecoverableError::HostHasOnlyIpv6Records
+                } else {
+                    UnrecoverableError::HostHasOnlyIpv4Records
+                })
+            }
+        },
+    };
+
     let mut app = ClientApp::connect(server_address).await?;
 
     app.run().await?;
@@ -58,12 +89,19 @@ async fn run_client_session(
 
 async fn run_server_session(
     port: u16,
+    ip_version: IpVersion,
     work: pomodoro::SessionDuration,
     short: pomodoro::SessionDuration,
     long: pomodoro::SessionDuration,
 ) -> Result<(), UnrecoverableError> {
     let settings = pomodoro::Settings::new(work, short, long, false);
-    let socket = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), port);
+    let socket = SocketAddr::new(
+        match ip_version {
+            IpVersion::V4 => Ipv4Addr::LOCALHOST.into(),
+            IpVersion::V6 => Ipv6Addr::LOCALHOST.into(),
+        },
+        port,
+    );
     let state = pomodoro::State::new(settings);
     let mut app = App::new(state)?;
 

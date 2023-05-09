@@ -294,6 +294,16 @@ pub enum UnrecoverableError {
     Tui(#[from] TuiError),
     #[error("network error: {0}")]
     Network(#[from] NetworkError),
+    #[error("failed to resolve hostname")]
+    HostHasNoDnsRecords,
+    #[error(
+        "failed to resolve hostname to an ipv4 address (but it can be resolved to an ipv6 address)"
+    )]
+    HostHasOnlyIpv6Records,
+    #[error(
+        "failed to resolve hostname to an ipv6 address (but it can be resolved to an ipv4 address)"
+    )]
+    HostHasOnlyIpv4Records,
 }
 
 struct ForeverPending;
