@@ -67,6 +67,8 @@ impl App {
             self.tui.render(&ui_data)?;
 
             if let Some(server) = &mut self.server {
+                server.accept_pending_connections().await;
+
                 let ui_data = UiData {
                     mode_info: AppModeInfo::Client {
                         connected_to: server.local_addr,
@@ -101,7 +103,7 @@ impl App {
                     }
                 }
                 event = async {
-                    match &self.server {
+                    match &mut self.server {
                         Some(server) => {
                             let msg = server.next_message().await?;
                             match msg {
@@ -119,16 +121,6 @@ impl App {
                             }
                         }
                         Err(_err) => (), // network error occured, ignore for now
-                    }
-                }
-                maybe_err = async {
-                    match &self.server {
-                        Some(server) => server.accept_connection().await,
-                        _ => ForeverPending.await.forever(),
-                    }
-                } => {
-                    if let Err(_err) = maybe_err {
-                        // a connection attempt has failed, ignore for now
                     }
                 }
             }

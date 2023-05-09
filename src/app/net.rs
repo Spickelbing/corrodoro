@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[derive(Serialize, Deserialize)]
@@ -66,22 +66,35 @@ impl RemoteServer {
     }
 }
 
-// There are two client maps so that one can be used to accept connections and the other to receive messages,
-// without having to lock the same list for both operations.
-// I use interior mutability so that the accepting and receiving methods can be non-mut,
-// and therefore can be used in the same `select!` block.
-// Clients will will be moved from `accepted_clients` to `connected_clients` when the next message is broadcast.
-// Livelocks are impossible because the broadcast method is mut, and therefore cannot be awaited concurrently
-// with the accepting and receiving methods.
 pub struct Server {
-    listener: TcpListener,
     pub local_addr: SocketAddr,
-    connected_clients: Mutex<HashMap<SocketAddr, FramedStream>>,
-    accepted_clients: Mutex<HashMap<SocketAddr, FramedStream>>,
-    pub clients: Vec<SocketAddr>, // always a copy of connected_clients.keys()
+    connections_rx: mpsc::Receiver<(SocketAddr, FramedStream)>,
+    connected_clients: HashMap<SocketAddr, FramedStream>,
+}
+
+async fn try_accept_connection(
+    listener: &mut TcpListener,
+) -> Result<(SocketAddr, FramedStream), NetworkError> {
+    let (stream, addr) = listener.accept().await.map_err(NetworkError::Accept)?;
+    let stream = bind_stream(stream);
+    Ok((addr, stream))
+}
+
+async fn listen(mut listener: TcpListener, tx: mpsc::Sender<(SocketAddr, FramedStream)>) {
+    loop {
+        if let Ok((addr, stream)) = try_accept_connection(&mut listener).await {
+            if tx.send((addr, stream)).await.is_err() {
+                break; // channel closed
+            }
+        } else {
+            // connection attempt failed, ignore for now
+        }
+    }
 }
 
 impl Server {
+    /// Starts to listen for connections in a separate task.
+    /// Connections are queued and have to be put into effect by calling `accept_pending_connections`.
     pub async fn bind(socket: SocketAddr) -> Result<Self, NetworkError> {
         let listener = TcpListener::bind(socket)
             .await
@@ -90,31 +103,29 @@ impl Server {
             .local_addr()
             .map_err(|e| NetworkError::Bind(socket, e))?;
 
+        let (tx, rx) = mpsc::channel(32);
+
+        tokio::spawn(listen(listener, tx));
+
         Ok(Self {
-            listener,
             local_addr,
-            connected_clients: Mutex::new(HashMap::new()),
-            accepted_clients: Mutex::new(HashMap::new()),
-            clients: Vec::new(),
+            connections_rx: rx,
+            connected_clients: HashMap::new(),
         })
     }
 
-    // This is the only method that locks `accepted_clients`.
-    pub async fn accept_connection(&self) -> Result<(), NetworkError> {
-        let (stream, addr) = self.listener.accept().await.map_err(NetworkError::Accept)?;
-        let stream = bind_stream(stream);
-        self.accepted_clients.lock().await.insert(addr, stream);
-        Ok(())
+    pub async fn accept_pending_connections(&mut self) {
+        while let Ok((addr, stream)) = self.connections_rx.try_recv() {
+            self.connected_clients.insert(addr, stream);
+        }
     }
 
     /// Disconnects the clients for whom there are networking errors.
     pub async fn broadcast_message(&mut self, msg: Message) -> Result<(), NetworkError> {
-        self.merge_client_collections();
-
         let serialized = bincode::serialize(&msg)?;
         let mut errors = Vec::new();
 
-        for (&addr, stream) in self.connected_clients.get_mut() {
+        for (&addr, stream) in &mut self.connected_clients {
             let result = stream.send(serialized.clone().into()).await;
 
             if let Err(err) = result {
@@ -136,14 +147,12 @@ impl Server {
     /// Pends forever if there are no connected clients. Does not wake up when a new client connects.
     // TODO: Make this function disconnect clients for whom there are networking errors.
     // (This requires keeping track of the addresses of clients in the order in which they are given to `select_all`.)
-    // This and `connected_clients()` are the only methods that lock `connected_clients`.
-    pub async fn next_message(&self) -> Result<Message, NetworkError> {
-        let mut connected_clients = self.connected_clients.lock().await;
-        if connected_clients.is_empty() {
+    pub async fn next_message(&mut self) -> Result<Message, NetworkError> {
+        if self.connected_clients.is_empty() {
             ForeverPending.await.forever()
         }
 
-        let futures = connected_clients.values_mut().map(|v| v.next());
+        let futures = self.connected_clients.values_mut().map(|v| v.next());
         let next = select_all(futures).await;
 
         if let (Some(msg), ..) = next {
@@ -158,21 +167,15 @@ impl Server {
     }
 
     fn disconnect_client(&mut self, addr: SocketAddr) {
-        self.connected_clients.get_mut().remove(&addr);
+        self.connected_clients.remove(&addr);
     }
 
     pub fn disconnect_all(&mut self) {
-        self.connected_clients.get_mut().clear();
+        self.connected_clients.clear();
     }
 
     pub fn clients(&self) -> Vec<SocketAddr> {
-        self.clients.clone()
-    }
-
-    fn merge_client_collections(&mut self) {
-        let accepted = self.accepted_clients.get_mut();
-        self.connected_clients.get_mut().extend(accepted.drain());
-        self.clients = self.connected_clients.get_mut().keys().copied().collect();
+        self.connected_clients.keys().copied().collect()
     }
 }
 
