@@ -13,8 +13,8 @@ pub struct Args {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Start a local session without networking
-    Local {
+    /// Start an offline session
+    Offline {
         /// Duration of a work session
         #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(25 * 60)))]
         work: SessionDuration,
@@ -28,9 +28,28 @@ pub enum Command {
         long: SessionDuration,
     },
 
-    /// Attach to a session
-    Client { server_address: SocketAddr },
+    /// Connect to a session
+    Connect {
+        /// Address of the server to connect to
+        #[arg(id = "ADDRESS:PORT")]
+        server_address: SocketAddr
+    },
 
     /// Host a session
-    Server { port: u16 },
+    Host {
+        /// Port to listen on
+        port: u16,
+    
+        /// Duration of a work session
+        #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(25 * 60)))]
+        work: SessionDuration,
+
+        /// Duration of a short break
+        #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(5 * 60)))]
+        short: SessionDuration,
+
+        /// Duration of a long break
+        #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(20 * 60)))]
+        long: SessionDuration,
+    },
 }

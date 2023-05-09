@@ -183,6 +183,22 @@ pub struct Settings {
     pub start_automatically: bool,
 }
 
+impl Settings {
+    pub fn new(
+        focus: SessionDuration,
+        short_break: SessionDuration,
+        long_break: SessionDuration,
+        start_automatically: bool,
+    ) -> Self {
+        Settings {
+            focus_duration: focus,
+            short_break_duration: short_break,
+            long_break_duration: long_break,
+            start_automatically,
+        }
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Settings {
