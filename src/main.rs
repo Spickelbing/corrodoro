@@ -1,7 +1,6 @@
-use std::net::{Ipv4Addr, SocketAddr};
-
 use crate::app::{App, ClientApp, UnrecoverableError};
 use crate::args::{Args, Parser};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::process::ExitCode;
 
 mod app;
@@ -16,7 +15,7 @@ async fn main() -> ExitCode {
 
     let result = match args.command {
         args::Command::Offline { work, short, long } => run_local_session(work, short, long).await,
-        args::Command::Connect { server_address } => run_client_session(server_address).await,
+        args::Command::Connect { server_address } => run_client_session(*server_address).await,
         args::Command::Host {
             port,
             work,
@@ -41,7 +40,7 @@ async fn run_local_session(
     let settings = pomodoro::Settings::new(work, short, long, false);
     let state = pomodoro::State::new(settings);
     let mut app = App::new(state)?;
-    
+
     app.run().await?;
 
     Ok(())
@@ -67,7 +66,7 @@ async fn run_server_session(
     let socket = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), port);
     let state = pomodoro::State::new(settings);
     let mut app = App::new(state)?;
-    
+
     app.start_server(socket).await?;
     app.run().await?;
     let _ = app.stop_server().await;
