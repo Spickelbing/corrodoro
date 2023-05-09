@@ -446,6 +446,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "corrodoro"
+version = "0.2.0"
+dependencies = [
+ "bincode",
+ "clap",
+ "crossterm 0.26.1",
+ "futures",
+ "itertools",
+ "notify-rust",
+ "rodio",
+ "serde",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tui",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "cpal"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1341,25 +1360,6 @@ dependencies = [
  "log",
  "pin-project-lite",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "pomo"
-version = "0.2.0"
-dependencies = [
- "bincode",
- "clap",
- "crossterm 0.26.1",
- "futures",
- "itertools",
- "notify-rust",
- "rodio",
- "serde",
- "thiserror",
- "tokio",
- "tokio-util",
- "tui",
- "unicode-segmentation",
 ]
 
 [[package]]
