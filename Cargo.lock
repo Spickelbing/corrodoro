@@ -455,6 +455,7 @@ dependencies = [
  "futures",
  "itertools",
  "notify-rust",
+ "rand",
  "rodio",
  "serde",
  "thiserror",
