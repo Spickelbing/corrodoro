@@ -1,4 +1,4 @@
-use crate::app::{Event, UiData, ForeverPending};
+use crate::app::{Event, ForeverPending, UiData};
 use futures::{future::select_all, SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -32,14 +32,14 @@ pub enum Command {
     Connect {
         /// Address of the server to connect to
         #[arg(id = "ADDRESS:PORT")]
-        server_address: SocketAddr
+        server_address: SocketAddr,
     },
 
     /// Host a session
     Host {
         /// Port to listen on
         port: u16,
-    
+
         /// Duration of a work session
         #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(25 * 60)))]
         work: SessionDuration,
