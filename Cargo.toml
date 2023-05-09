@@ -2,6 +2,11 @@
 name = "corrodoro"
 version = "0.3.0"
 edition = "2021"
+description = "A terminal-ui pomodoro timer where your friends can join you focusing via network."
+license = "MIT OR Apache-2.0"
+keywords = ["pomodoro", "focus", "tui", "network", "timer"]
+categories = ["command-line-utilities"]
+repository = "https://github.com/Spickelbing/corrodoro"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
