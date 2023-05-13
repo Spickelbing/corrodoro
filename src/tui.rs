@@ -11,6 +11,7 @@ use tui::{backend::CrosstermBackend, Terminal};
 
 mod animation;
 mod render;
+mod widgets;
 
 pub struct Tui {
     terminal: Terminal<CrosstermBackend<io::Stdout>>,
