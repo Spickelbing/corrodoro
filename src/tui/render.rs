@@ -1,36 +1,55 @@
 use crate::app::AppModeInfo;
 use crate::app::Display;
 use crate::tui::animation;
+use crate::tui::widgets::BlockWithLegend;
 use std::io;
+use tui::layout::Margin;
 use tui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets,
-    Frame,
+    widgets, Frame,
 };
+use unicode_segmentation::UnicodeSegmentation;
 
-fn define_block<'a>(title: &'a str, legend: Vec<&'a str>) -> widgets::Block<'a> {
+fn split_initial(str: &str) -> (&str, &str) {
+    let mut graphemes = str.graphemes(true);
+
+    let initial = graphemes.next().unwrap_or("");
+    let remainder = graphemes.as_str();
+
+    (initial, remainder)
+}
+
+fn define_block<'a>(title: &'a str, legend: Vec<&'a str>) -> BlockWithLegend<'a> {
     let text_style = Style::default()
         .fg(Color::White)
         .add_modifier(Modifier::BOLD);
     let initials_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
 
-    let (initial, remainder) = match title.len() {
-        0 => ("", ""),
-        1 => (title, ""),
-        _ => title.split_at(1),
-    };
+    let (initial, remainder) = split_initial(title);
 
     let title = Spans::from(vec![
         Span::styled(initial, initials_style),
         Span::styled(remainder, text_style),
     ]);
 
-    widgets::Block::default()
+    let legend = legend
+        .into_iter()
+        .map(|s| {
+            let (initial, remainder) = split_initial(s);
+            Spans::from(vec![
+                Span::styled(initial, initials_style),
+                Span::styled(remainder, text_style),
+            ])
+        })
+        .collect();
+
+    BlockWithLegend::default()
         .borders(widgets::Borders::ALL)
         .title(title)
+        .legend(legend)
 }
 
 pub fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &Display) {
@@ -43,7 +62,7 @@ pub fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &
         (toplevel_chunks[0], toplevel_chunks[1])
     };
 
-    let widget_timer_block = define_block("timer", vec![]);
+    let widget_timer_block = define_block("timer", vec!["␣ toggle", "↕ adjust", "skip", "quit"]);
 
     let timer_chunk_within_border = timer_chunk.inner(&Margin {
         horizontal: 1,
