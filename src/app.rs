@@ -1,4 +1,4 @@
-use crate::app::net::{Message, NetworkError, RemoteServer, Server};
+use crate::net::{Client, ClientMessage, NetworkError, Server, ServerMessage};
 use crate::pomodoro;
 use crate::tui::{Tui, TuiError};
 use serde::{Deserialize, Serialize};
@@ -10,8 +10,6 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::select;
 use tokio::time::{interval, Interval};
-
-mod net;
 
 pub struct App {
     pomodoro_state: pomodoro::State,
@@ -58,8 +56,8 @@ impl App {
 
         let mut notify_end_of_activity = false;
         loop {
-            let ui_data = UiData::from(&*self);
-            let ui_data = UiData {
+            let ui_data = Display::from(&*self);
+            let ui_data = Display {
                 notify_end_of_activity,
                 ..ui_data
             };
@@ -67,18 +65,20 @@ impl App {
             self.tui.render(&ui_data)?;
 
             if let Some(server) = &mut self.server {
-                server.accept_pending_connections().await;
-
-                let ui_data = UiData {
+                let visuals = Display {
                     mode_info: AppModeInfo::Client {
                         connected_to: server.local_addr,
                     },
                     ..ui_data
                 };
 
-                let message = Message::UiData(ui_data);
-                // ignore transmission errors for now
-                let _ = server.broadcast_message(message).await;
+                let maybe_msg = ServerMessage::new(visuals);
+                if let Ok(msg) = maybe_msg {
+                    // ignore transmission errors for now
+                    let _ = server.broadcast_frame(msg.into()).await;
+                } else {
+                    // this should never happen
+                }
             }
             notify_end_of_activity = false;
 
@@ -105,10 +105,9 @@ impl App {
                 event = async {
                     match &mut self.server {
                         Some(server) => {
-                            let msg = server.next_message().await?;
-                            match msg {
-                                Message::Event(event) => Ok(event),
-                                _ => Err(NetworkError::UnexpectedMessage),
+                            match server.recv_frame().await {
+                                Ok(frame) => ClientMessage::deserialize(&frame),
+                                Err(err) => Err(err),
                             }
                         }
                         _ => ForeverPending.await.forever(),
@@ -170,24 +169,26 @@ impl App {
 
 pub struct ClientApp {
     tui: Tui,
-    remote_server: RemoteServer,
+    client: Client,
 }
 
 impl ClientApp {
     pub async fn connect(addr: SocketAddr) -> Result<Self, UnrecoverableError> {
-        let remote_server = RemoteServer::connect(addr).await?;
+        let remote_server = Client::connect(addr).await?;
         let tui = Tui::new()?;
 
-        Ok(Self { tui, remote_server })
+        Ok(Self {
+            tui,
+            client: remote_server,
+        })
     }
 
     pub async fn run(&mut self) -> Result<(), UnrecoverableError> {
         self.tui.enable()?;
-        let maybe_err = self.run_inner().await;
+        let result = self.run_inner().await;
         self.tui.disable()?;
 
-        maybe_err?;
-        Ok(())
+        result
     }
 
     async fn run_inner(&mut self) -> Result<(), UnrecoverableError> {
@@ -201,17 +202,13 @@ impl ClientApp {
                         break;
                     }
 
-                    let msg = Message::Event(event);
-                    self.remote_server.send_message(msg).await?;
+                    let msg = ClientMessage::new(event)?;
+                    self.client.send_frame(msg.into()).await?;
                 }
-                msg = self.remote_server.next_message() => {
+                msg = self.client.recv_frame() => {
                     let msg = msg?;
-                    if let Message::UiData(render_data) = msg {
-                        self.tui.render(&render_data)?;
-                    } else {
-                        // this should never happen
-                        // TODO: handle error
-                    }
+                    let visuals = ServerMessage::deserialize(&msg)?;
+                    self.tui.render(&visuals)?;
                 }
             }
         }
@@ -230,7 +227,6 @@ impl Deref for AppShouldQuit {
     }
 }
 
-/// These are the events that can be sent to the app, either from a UI or via network.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Event {
     Quit,
@@ -241,9 +237,8 @@ pub enum Event {
     ReduceActivity(Duration),
 }
 
-/// This is the data that is sent to a UI for display.
 #[derive(Serialize, Deserialize)]
-pub struct UiData {
+pub struct Display {
     pub time_remaining: pomodoro::SessionDuration,
     pub timer_is_paused: bool,
     pub activity: pomodoro::Activity,
@@ -253,7 +248,7 @@ pub struct UiData {
     pub mode_info: AppModeInfo,
 }
 
-impl From<&App> for UiData {
+impl From<&App> for Display {
     fn from(app: &App) -> Self {
         let mode_info = match &app.server {
             Some(server) => AppModeInfo::Server {
@@ -263,7 +258,7 @@ impl From<&App> for UiData {
             None => AppModeInfo::Offline,
         };
 
-        UiData {
+        Display {
             time_remaining: app.pomodoro_state.time_remaining(),
             timer_is_paused: !app.pomodoro_state.timer_is_active(),
             activity: app.pomodoro_state.current_activity(),

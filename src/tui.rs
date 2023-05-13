@@ -1,4 +1,4 @@
-use crate::app::{AppModeInfo, Event, UiData};
+use crate::app::{AppModeInfo, Display, Event};
 use crate::notification;
 use crossterm::event::{
     Event as CrosstermEvent, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
@@ -69,7 +69,7 @@ impl Tui {
         Ok(())
     }
 
-    pub fn render(&mut self, render_data: &UiData) -> Result<(), TuiError> {
+    pub fn render(&mut self, render_data: &Display) -> Result<(), TuiError> {
         self.terminal
             .draw(|f| {
                 render_ui(f, render_data);
@@ -119,7 +119,7 @@ pub enum TuiError {
     EventStreamClosed,
 }
 
-fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &UiData) {
+fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &Display) {
     let (_settings_chunk, timer_chunk) = {
         let toplevel_chunks = Layout::default()
             .direction(Direction::Horizontal)
