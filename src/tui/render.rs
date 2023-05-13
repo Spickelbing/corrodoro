@@ -45,25 +45,10 @@ pub fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &
 
     let widget_timer_block = define_block("timer", vec![]);
 
-    let timer_chunk_within_border = {
-        let horizontal = Layout::default()
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ])
-            .direction(Direction::Horizontal)
-            .split(timer_chunk);
-
-        Layout::default()
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ])
-            .direction(Direction::Vertical)
-            .split(horizontal[1])[1]
-    };
+    let timer_chunk_within_border = timer_chunk.inner(&Margin {
+        horizontal: 1,
+        vertical: 1,
+    });
 
     let clock_animation_chunk = {
         let (clock_width, clock_height) = (21, 11); // TODO: make clock dimensions dynamic
