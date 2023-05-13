@@ -106,7 +106,7 @@ pub fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &
     };
 
     let widget_clock_animation = {
-        let partial_clock = animation::partial_box(1.0 - render_data.progress_percentage);
+        let partial_clock = animation::clock(1.0 - render_data.progress_percentage);
 
         widgets::Paragraph::new(partial_clock).alignment(Alignment::Left)
     };
@@ -122,7 +122,7 @@ pub fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &
 
         format!(
             "{}\n{}\n{} {}",
-            animation::completed_sessions_counter(n_highlighted_indicators, 4),
+            animation::session_counter(n_highlighted_indicators, 4),
             render_data.time_remaining,
             render_data.activity,
             if render_data.timer_is_paused {

@@ -2,7 +2,7 @@ use itertools::intersperse;
 use std::iter;
 use unicode_segmentation::UnicodeSegmentation;
 
-pub fn completed_sessions_counter(
+pub fn session_counter(
     n_highlighted_indicators: usize,
     n_indicators: usize,
 ) -> String {
@@ -11,7 +11,7 @@ pub fn completed_sessions_counter(
     intersperse(counter.graphemes(true), " ").collect()
 }
 
-pub fn partial_box(percentage: f64) -> String {
+pub fn clock(percentage: f64) -> String {
     let percentage = percentage.max(0.0).min(1.0);
 
     const WHOLE_BOX: &str = "╭───────────────────╮
