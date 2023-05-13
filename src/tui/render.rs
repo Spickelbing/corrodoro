@@ -126,7 +126,7 @@ pub fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &
             render_data.time_remaining,
             render_data.activity,
             if render_data.timer_is_paused {
-                "▶"
+                "⏵"
             } else {
                 "⏸"
             }
