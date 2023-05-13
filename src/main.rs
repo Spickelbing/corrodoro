@@ -16,20 +16,18 @@ async fn main() -> ExitCode {
     let args = Args::parse();
 
     let result = match args.command {
-        args::Command::Offline { work, short, long } => {
-            run_offline_session(work, short, long).await
-        }
+        args::Command::Offline { work, short, long } => run_offline(work, short, long).await,
         args::Command::Connect {
             server_address,
             ip_version,
-        } => run_client_session(server_address.resolved(), ip_version).await,
+        } => run_client(server_address.resolved(), ip_version).await,
         args::Command::Host {
             port,
             ip_version,
             work,
             short,
             long,
-        } => run_server_session(port, ip_version, work, short, long).await,
+        } => run_server(port, ip_version, work, short, long).await,
     };
 
     if let Err(err) = result {
@@ -40,7 +38,7 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn run_offline_session(
+async fn run_offline(
     work: pomodoro::SessionDuration,
     short: pomodoro::SessionDuration,
     long: pomodoro::SessionDuration,
@@ -54,7 +52,7 @@ async fn run_offline_session(
     Ok(())
 }
 
-async fn run_client_session(
+async fn run_client(
     server_addresses: Vec<SocketAddr>,
     ip_version: IpVersion,
 ) -> Result<(), UnrecoverableError> {
@@ -88,7 +86,7 @@ async fn run_client_session(
     Ok(())
 }
 
-async fn run_server_session(
+async fn run_server(
     port: u16,
     ip_version: IpVersion,
     work: pomodoro::SessionDuration,
