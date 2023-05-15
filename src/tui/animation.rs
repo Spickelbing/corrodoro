@@ -2,10 +2,7 @@ use itertools::intersperse;
 use std::iter;
 use unicode_segmentation::UnicodeSegmentation;
 
-pub fn session_counter(
-    n_highlighted_indicators: usize,
-    n_indicators: usize,
-) -> String {
+pub fn session_counter(n_highlighted_indicators: usize, n_indicators: usize) -> String {
     let counter = "▢".repeat(n_highlighted_indicators)
         + &"-".repeat(n_indicators.saturating_sub(n_highlighted_indicators));
     intersperse(counter.graphemes(true), " ").collect()

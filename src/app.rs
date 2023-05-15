@@ -157,7 +157,6 @@ impl App {
                 self.pomodoro_state.reset();
             }
             Event::Quit => return AppShouldQuit(true),
-            _ => (),
         };
 
         let timer_is_active_now = self.pomodoro_state.timer_is_active();
