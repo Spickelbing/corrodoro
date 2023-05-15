@@ -18,6 +18,8 @@ pub struct Tui {
     raw_mode_enabled: bool,
     alternate_screen_enabled: bool,
     event_stream: EventStream,
+    show_settings: bool,
+    show_timer: bool,
 }
 
 impl Tui {
@@ -29,6 +31,8 @@ impl Tui {
             alternate_screen_enabled: false,
             raw_mode_enabled: false,
             event_stream: EventStream::new(),
+            show_settings: true,
+            show_timer: true,
         })
     }
 
@@ -70,7 +74,7 @@ impl Tui {
     pub fn render(&mut self, render_data: &Display) -> Result<(), TuiError> {
         self.terminal
             .draw(|f| {
-                render::render_ui(f, render_data);
+                render::render_ui(f, render_data, self.show_settings, self.show_timer);
             })
             .map_err(TuiError::Rendering)?;
 
@@ -85,6 +89,10 @@ impl Tui {
     pub async fn read_event(&mut self) -> Result<Event, TuiError> {
         loop {
             let crossterm_event = self.read_crossterm_event().await?;
+
+            // just slapped in real quick, could do this nicer
+            self.handle_crossterm_event(&crossterm_event);
+
             if let Ok(event) = Event::try_from(crossterm_event) {
                 return Ok(event);
             }
@@ -98,6 +106,27 @@ impl Tui {
             .map_err(TuiError::ReadInputEvent)?;
 
         Ok(event)
+    }
+
+    fn handle_crossterm_event(&mut self, event: &CrosstermEvent) {
+        match event {
+            CrosstermEvent::Key(key_event) if key_event.kind != KeyEventKind::Release => {
+                match key_event.code {
+                    KeyCode::Char('1') => self.toggle_settings(),
+                    KeyCode::Char('2') => self.toggle_timer(),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn toggle_settings(&mut self) {
+        self.show_settings = !self.show_settings;
+    }
+
+    fn toggle_timer(&mut self) {
+        self.show_timer = !self.show_timer;
     }
 }
 
@@ -122,8 +151,8 @@ pub struct EventConversionUndefinedError;
 impl TryFrom<CrosstermEvent> for Event {
     type Error = EventConversionUndefinedError;
 
-    fn try_from(value: CrosstermEvent) -> Result<Self, Self::Error> {
-        match value {
+    fn try_from(event: CrosstermEvent) -> Result<Self, Self::Error> {
+        match event {
             CrosstermEvent::Key(key_event)
                 if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
             {
@@ -132,10 +161,7 @@ impl TryFrom<CrosstermEvent> for Event {
                     _ => None,
                 }
             }
-            CrosstermEvent::Key(key_event)
-                if key_event.kind == KeyEventKind::Press
-                    || key_event.kind == KeyEventKind::Repeat =>
-            {
+            CrosstermEvent::Key(key_event) if key_event.kind != KeyEventKind::Release => {
                 match key_event.code {
                     KeyCode::Char('q') => Some(Event::Quit),
                     KeyCode::Char('r') => Some(Event::ResetTimer),

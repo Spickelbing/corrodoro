@@ -1,9 +1,9 @@
 use crate::app::AppModeInfo;
 use crate::app::Display;
 use crate::tui::animation;
-use crate::tui::widgets::BlockWithLegend;
+use crate::tui::widgets::{BlockWithLegend, Settings};
 use std::io;
-use tui::layout::Margin;
+use tui::widgets::BorderType;
 use tui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
@@ -23,12 +23,12 @@ fn split_initial(str: &str) -> (&str, &str) {
 }
 
 fn define_block<'a>(title: &'a str, legend: Vec<&'a str>) -> BlockWithLegend<'a> {
+    let (initial, remainder) = split_initial(title);
+
     let text_style = Style::default()
         .fg(Color::White)
         .add_modifier(Modifier::BOLD);
     let initials_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
-
-    let (initial, remainder) = split_initial(title);
 
     let title = Spans::from(vec![
         Span::styled(initial, initials_style),
@@ -39,6 +39,7 @@ fn define_block<'a>(title: &'a str, legend: Vec<&'a str>) -> BlockWithLegend<'a>
         .into_iter()
         .map(|s| {
             let (initial, remainder) = split_initial(s);
+
             Spans::from(vec![
                 Span::styled(initial, initials_style),
                 Span::styled(remainder, text_style),
@@ -48,26 +49,42 @@ fn define_block<'a>(title: &'a str, legend: Vec<&'a str>) -> BlockWithLegend<'a>
 
     BlockWithLegend::default()
         .borders(widgets::Borders::ALL)
+        .border_type(BorderType::Rounded)
         .title(title)
         .legend(legend)
 }
 
-pub fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &Display) {
-    let (_settings_chunk, timer_chunk) = {
+pub fn render_ui(
+    frame: &mut Frame<CrosstermBackend<io::Stdout>>,
+    render_data: &Display,
+    show_settings: bool,
+    show_timer: bool,
+) {
+    let (settings_chunk, timer_chunk) = {
+        let (settings_pct, timer_pct) = match (show_settings, show_timer) {
+            (true, true) => (20, 80),
+            (true, false) => (100, 0),
+            (false, true) => (0, 100),
+            (false, false) => (0, 0),
+        };
+
         let toplevel_chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(0), Constraint::Percentage(80)])
+            .constraints([
+                Constraint::Percentage(settings_pct),
+                Constraint::Percentage(timer_pct),
+            ])
             .split(frame.size());
 
         (toplevel_chunks[0], toplevel_chunks[1])
     };
 
-    let widget_timer_block = define_block("timer", vec!["␣ toggle", "↕ adjust", "skip", "quit"]);
+    let widget_timer_block = define_block(
+        "²timer",
+        vec!["␣ toggle", "↕ adjust", "skip", "reset", "quit"],
+    );
 
-    let timer_chunk_within_border = timer_chunk.inner(&Margin {
-        horizontal: 1,
-        vertical: 1,
-    });
+    let timer_chunk_within_border = widget_timer_block.inner(timer_chunk);
 
     let clock_animation_chunk = {
         let (clock_width, clock_height) = (21, 11); // TODO: make clock dimensions dynamic
@@ -182,10 +199,16 @@ pub fn render_ui(frame: &mut Frame<CrosstermBackend<io::Stdout>>, render_data: &
         }
     };
 
-    let widget_network_info = widgets::Paragraph::new(network_info_text).alignment(Alignment::Left);
+    let widget_network_info = Settings::default()
+        .status(&network_info_text)
+        .block(define_block("¹settings", vec![]));
 
-    frame.render_widget(widget_network_info, timer_chunk_within_border);
-    frame.render_widget(widget_clock_animation, clock_animation_chunk);
-    frame.render_widget(widget_clock_text, clock_text_chunk);
-    frame.render_widget(widget_timer_block, timer_chunk);
+    if show_settings {
+        frame.render_widget(widget_network_info, settings_chunk);
+    }
+    if show_timer {
+        frame.render_widget(widget_clock_animation, clock_animation_chunk);
+        frame.render_widget(widget_clock_text, clock_text_chunk);
+        frame.render_widget(widget_timer_block, timer_chunk);
+    }
 }

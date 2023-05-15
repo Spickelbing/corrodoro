@@ -1,9 +1,9 @@
 use std::iter::once;
 use tui::{
-    layout::{Alignment, Rect},
+    layout::{Alignment, Constraint, Layout, Rect},
     style::Style,
     text::{Span, Spans},
-    widgets::{Block, BorderType, Borders, Widget},
+    widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap},
 };
 
 pub struct BlockWithLegend<'a> {
@@ -94,5 +94,52 @@ impl<'a> Widget for BlockWithLegend<'a> {
             let (x, _) = buf.set_spans(legend_x, legend_y, &legend, width_remaining);
             legend_x = x;
         }
+    }
+}
+
+#[derive(Default)]
+pub struct Settings<'a> {
+    block: Option<BlockWithLegend<'a>>,
+    network_status: &'a str,
+}
+
+impl<'a> Settings<'a> {
+    pub fn block(mut self, block: BlockWithLegend<'a>) -> Settings<'a> {
+        self.block = Some(block);
+        self
+    }
+
+    pub fn status(mut self, status: &'a str) -> Settings<'a> {
+        self.network_status = status;
+        self
+    }
+}
+
+impl<'a> Widget for Settings<'a> {
+    fn render(self, area: Rect, buf: &mut tui::buffer::Buffer) {
+        let inner_area = match &self.block {
+            Some(block) => block.inner(area),
+            None => area,
+        };
+        if let Some(block) = self.block {
+            block.render(area, buf);
+        }
+
+        let text_area = {
+            let text_height = self.network_status.lines().count() as u16;
+            let top_padding = (inner_area.height / 2).saturating_sub(text_height / 2);
+
+            Layout::default()
+                .constraints([
+                    Constraint::Length(top_padding),
+                    Constraint::Min(text_height),
+                ])
+                .split(inner_area)[1]
+        };
+
+        Paragraph::new(self.network_status)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true })
+            .render(text_area, buf);
     }
 }
