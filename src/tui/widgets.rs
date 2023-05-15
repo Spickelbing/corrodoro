@@ -90,7 +90,7 @@ impl<'a> Widget for BlockWithLegend<'a> {
                 .collect::<Vec<_>>()
                 .into();
 
-            let width_remaining = area.width.saturating_sub(legend_x + 1);
+            let width_remaining = area.width.saturating_sub(legend_x - area.x + 1);
             let (x, _) = buf.set_spans(legend_x, legend_y, &legend, width_remaining);
             legend_x = x;
         }
