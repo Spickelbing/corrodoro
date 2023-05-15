@@ -138,6 +138,14 @@ impl State {
             Activity::LongBreak => Activity::Focus,
         }
     }
+
+    pub fn reset(&mut self) {
+        self.activity = Activity::Focus;
+        self.progress = Duration::from_secs(0).into();
+        self.completed_focus_sessions = 0;
+        self.timer_is_active = self.settings.start_automatically;
+        self.current_activity_duration_override = None;
+    }
 }
 
 impl Display for State {

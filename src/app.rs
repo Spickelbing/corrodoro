@@ -153,6 +153,9 @@ impl App {
             Event::SkipActivity => {
                 self.pomodoro_state.skip_activity();
             }
+            Event::ResetTimer => {
+                self.pomodoro_state.reset();
+            }
             Event::Quit => return AppShouldQuit(true),
             _ => (),
         };
