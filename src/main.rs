@@ -96,8 +96,8 @@ async fn run_server(
     let settings = pomodoro::Settings::new(work, short, long, false);
     let socket = SocketAddr::new(
         match ip_version {
-            IpVersion::V4 => Ipv4Addr::LOCALHOST.into(),
-            IpVersion::V6 => Ipv6Addr::LOCALHOST.into(),
+            IpVersion::V4 => Ipv4Addr::UNSPECIFIED.into(),
+            IpVersion::V6 => Ipv6Addr::UNSPECIFIED.into(),
         },
         port,
     );
