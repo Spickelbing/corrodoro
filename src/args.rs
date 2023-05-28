@@ -19,9 +19,9 @@ pub struct Args {
 pub enum Command {
     /// Start an offline session
     Offline {
-        /// Duration of a work session
+        /// Duration of a focus session
         #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(25 * 60)))]
-        work: SessionDuration,
+        focus: SessionDuration,
 
         /// Duration of a short break
         #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(5 * 60)))]
@@ -47,12 +47,9 @@ pub enum Command {
         /// Port to listen on
         port: u16,
 
-        #[arg(short, long, default_value_t = IpVersion::V4)]
-        ip_version: IpVersion,
-
-        /// Duration of a work session
+        /// Duration of a focus session
         #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(25 * 60)))]
-        work: SessionDuration,
+        focus: SessionDuration,
 
         /// Duration of a short break
         #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(5 * 60)))]
@@ -61,6 +58,9 @@ pub enum Command {
         /// Duration of a long break
         #[arg(short, long, default_value_t = SessionDuration(Duration::from_secs(20 * 60)))]
         long: SessionDuration,
+
+        #[arg(short, long, default_value_t = IpVersion::V4)]
+        ip_version: IpVersion,
     },
 }
 

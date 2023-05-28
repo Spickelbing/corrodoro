@@ -16,7 +16,7 @@ async fn main() -> ExitCode {
     let args = Args::parse();
 
     let result = match args.command {
-        args::Command::Offline { work, short, long } => run_offline(work, short, long).await,
+        args::Command::Offline { focus, short, long } => run_offline(focus, short, long).await,
         args::Command::Connect {
             server_address,
             ip_version,
@@ -24,10 +24,10 @@ async fn main() -> ExitCode {
         args::Command::Host {
             port,
             ip_version,
-            work,
+            focus,
             short,
             long,
-        } => run_server(port, ip_version, work, short, long).await,
+        } => run_server(port, ip_version, focus, short, long).await,
     };
 
     if let Err(err) = result {
