@@ -95,6 +95,7 @@ impl App {
                         let activity_after = self.pomodoro_state.current_activity();
                         if activity_before != activity_after {
                             self.broadcast_notify(activity_after).await;
+                            self.tui.show_notification(activity_after);
                         }
                     }
                 }
