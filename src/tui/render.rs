@@ -1,5 +1,5 @@
-use crate::app::AppModeInfo;
-use crate::app::Display;
+use crate::app::NetworkStatus;
+use crate::net::TimerVisuals;
 use crate::tui::animation;
 use crate::tui::widgets::{BlockWithLegend, Settings};
 use std::io;
@@ -56,7 +56,8 @@ fn define_block<'a>(title: &'a str, legend: Vec<&'a str>) -> BlockWithLegend<'a>
 
 pub fn render_ui(
     frame: &mut Frame<CrosstermBackend<io::Stdout>>,
-    render_data: &Display,
+    timer_visuals: &TimerVisuals,
+    network_status: &NetworkStatus,
     show_settings: bool,
     show_timer: bool,
 ) {
@@ -127,15 +128,15 @@ pub fn render_ui(
     };
 
     let widget_clock_animation = {
-        let partial_clock = animation::clock(1.0 - render_data.progress_percentage);
+        let partial_clock = animation::clock(1.0 - timer_visuals.progress_percentage);
 
         widgets::Paragraph::new(partial_clock).alignment(Alignment::Left)
     };
 
     let clock_text = {
-        let is_fourth_session = render_data.completed_focus_sessions % 4 == 0;
-        let n_highlighted_indicators: usize = render_data.completed_focus_sessions as usize % 4
-            + match (render_data.activity.is_focus(), is_fourth_session) {
+        let is_fourth_session = timer_visuals.completed_focus_sessions % 4 == 0;
+        let n_highlighted_indicators: usize = timer_visuals.completed_focus_sessions as usize % 4
+            + match (timer_visuals.activity.is_focus(), is_fourth_session) {
                 (true, _) => 1,
                 (false, true) => 4,
                 _ => 0,
@@ -144,9 +145,9 @@ pub fn render_ui(
         format!(
             "{}\n{}\n{} {}",
             animation::session_counter(n_highlighted_indicators, 4),
-            render_data.time_remaining,
-            render_data.activity,
-            if render_data.timer_is_paused {
+            timer_visuals.time_remaining,
+            timer_visuals.activity,
+            if timer_visuals.timer_is_paused {
                 "⏵"
             } else {
                 "⏸"
@@ -176,9 +177,9 @@ pub fn render_ui(
     let widget_clock_text = widgets::Paragraph::new(clock_text).alignment(Alignment::Center);
 
     let network_info_text = {
-        match &render_data.mode_info {
-            AppModeInfo::Offline => "offline".to_string(),
-            AppModeInfo::Server {
+        match &network_status {
+            NetworkStatus::Offline => "offline".to_string(),
+            NetworkStatus::Server {
                 connected_clients,
                 listening_on,
             } => {
@@ -193,7 +194,7 @@ pub fn render_ui(
                     listening_on.port()
                 )
             }
-            AppModeInfo::Client { connected_to } => {
+            NetworkStatus::Client { connected_to } => {
                 format!("connected to {connected_to}")
             }
         }

@@ -1,5 +1,5 @@
-use crate::net::{Client, ClientMessage, NetworkError, Server, ServerMessage};
-use crate::pomodoro;
+use crate::net::{Client, ClientMessage, Event, NetworkError, Server, ServerMessage, TimerVisuals};
+use crate::pomodoro::{Activity, State};
 use crate::tui::{Tui, TuiError};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -12,13 +12,13 @@ use tokio::select;
 use tokio::time::{interval, Interval};
 
 pub struct App {
-    pomodoro_state: pomodoro::State,
+    pomodoro_state: State,
     tui: Tui,
     server: Option<Server>,
 }
 
 impl App {
-    pub fn new(pomodoro_state: pomodoro::State) -> Result<Self, UnrecoverableError> {
+    pub fn new(pomodoro_state: State) -> Result<Self, UnrecoverableError> {
         let tui = Tui::new()?;
 
         Ok(Self {
@@ -50,37 +50,39 @@ impl App {
         Ok(())
     }
 
+    async fn broadcast_visuals(&mut self, visuals: TimerVisuals) {
+        if let Some(server) = &mut self.server {
+            let maybe_bytes = ServerMessage::Display(visuals).as_bytes();
+            if let Ok(msg) = maybe_bytes {
+                // ignore transmission errors for now
+                let _ = server.broadcast_frame(msg).await;
+            } else {
+                // this should never happen
+            }
+        }
+    }
+
+    async fn broadcast_notify(&mut self, next_activity: Activity) {
+        if let Some(server) = &mut self.server {
+            let maybe_bytes = ServerMessage::Notify(next_activity).as_bytes();
+            if let Ok(msg) = maybe_bytes {
+                // ignore transmission errors for now
+                let _ = server.broadcast_frame(msg).await;
+            } else {
+                // this should never happen
+            }
+        }
+    }
+
     async fn run_inner(&mut self) -> Result<(), UnrecoverableError> {
         let mut pomodoro_clock = interval(Duration::from_millis(100));
         let mut pomodoro_start_time = Instant::now();
 
-        let mut notify_end_of_activity = false;
         loop {
-            let ui_data = Display::from(&*self);
-            let ui_data = Display {
-                notify_end_of_activity,
-                ..ui_data
-            };
-
-            self.tui.render(&ui_data)?;
-
-            if let Some(server) = &mut self.server {
-                let visuals = Display {
-                    mode_info: AppModeInfo::Client {
-                        connected_to: server.local_addr,
-                    },
-                    ..ui_data
-                };
-
-                let maybe_msg = ServerMessage::new(visuals);
-                if let Ok(msg) = maybe_msg {
-                    // ignore transmission errors for now
-                    let _ = server.broadcast_frame(msg.into()).await;
-                } else {
-                    // this should never happen
-                }
-            }
-            notify_end_of_activity = false;
+            let visuals = TimerVisuals::from(&*self);
+            let network_status = NetworkStatus::from(&*self);
+            self.tui.render(&visuals, &network_status)?;
+            self.broadcast_visuals(visuals).await;
 
             select! {
                 _ = pomodoro_clock.tick() => {
@@ -92,29 +94,29 @@ impl App {
 
                         let activity_after = self.pomodoro_state.current_activity();
                         if activity_before != activity_after {
-                            notify_end_of_activity = true;
+                            self.broadcast_notify(activity_after).await;
                         }
                     }
                 }
-                event = self.tui.read_event() => {
-                    let event = event?;
+                tui_event = self.tui.read_event() => {
+                    let event = tui_event?;
                     if *self.handle_event(&event, &mut pomodoro_clock, &mut pomodoro_start_time) {
                         break;
                     }
                 }
-                event = async {
+                client_msg = async {
                     match &mut self.server {
                         Some(server) => {
                             match server.recv_frame().await {
-                                Ok(frame) => ClientMessage::deserialize(&frame),
+                                Ok(frame) => ClientMessage::from_bytes(frame),
                                 Err(err) => Err(err),
                             }
                         }
                         _ => ForeverPending.await.forever(),
                     }
                 } => {
-                    match event {
-                        Ok(event) => {
+                    match client_msg {
+                        Ok(ClientMessage::Event(event)) => {
                             if *self.handle_event(&event, &mut pomodoro_clock, &mut pomodoro_start_time) {
                                 break;
                             }
@@ -194,6 +196,8 @@ impl ClientApp {
     }
 
     async fn run_inner(&mut self) -> Result<(), UnrecoverableError> {
+        let network_status = NetworkStatus::from(&*self);
+
         loop {
             // TODO: what about resize events?
             select! {
@@ -204,13 +208,16 @@ impl ClientApp {
                         break;
                     }
 
-                    let msg = ClientMessage::new(event)?;
-                    self.client.send_frame(msg.into()).await?;
+                    let bytes = ClientMessage::Event(event).as_bytes()?;
+                    self.client.send_frame(bytes).await?;
                 }
                 msg = self.client.recv_frame() => {
                     let msg = msg?;
-                    let visuals = ServerMessage::deserialize(&msg)?;
-                    self.tui.render(&visuals)?;
+                    let msg = ServerMessage::from_bytes(msg)?;
+                    match msg {
+                        ServerMessage::Display(visuals) => self.tui.render(&visuals, &network_status)?,
+                        ServerMessage::Notify(activity) => self.tui.show_notification(activity),
+                    }
                 }
             }
         }
@@ -229,51 +236,20 @@ impl Deref for AppShouldQuit {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Event {
-    Quit,
-    ToggleTimer,
-    ResetTimer,
-    SkipActivity,
-    ExtendActivity(Duration),
-    ReduceActivity(Duration),
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Display {
-    pub time_remaining: pomodoro::SessionDuration,
-    pub timer_is_paused: bool,
-    pub activity: pomodoro::Activity,
-    pub progress_percentage: f64,
-    pub completed_focus_sessions: u32,
-    pub notify_end_of_activity: bool,
-    pub mode_info: AppModeInfo,
-}
-
-impl From<&App> for Display {
+impl From<&App> for TimerVisuals {
     fn from(app: &App) -> Self {
-        let mode_info = match &app.server {
-            Some(server) => AppModeInfo::Server {
-                connected_clients: server.clients(),
-                listening_on: server.local_addr,
-            },
-            None => AppModeInfo::Offline,
-        };
-
-        Display {
+        TimerVisuals {
             time_remaining: app.pomodoro_state.time_remaining(),
             timer_is_paused: !app.pomodoro_state.timer_is_active(),
             activity: app.pomodoro_state.current_activity(),
             progress_percentage: app.pomodoro_state.progress_percentage(),
             completed_focus_sessions: app.pomodoro_state.completed_focus_sessions(),
-            notify_end_of_activity: false,
-            mode_info,
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum AppModeInfo {
+pub enum NetworkStatus {
     Offline,
     Server {
         connected_clients: Vec<SocketAddr>,
@@ -282,6 +258,26 @@ pub enum AppModeInfo {
     Client {
         connected_to: SocketAddr,
     },
+}
+
+impl From<&App> for NetworkStatus {
+    fn from(app: &App) -> Self {
+        match &app.server {
+            Some(server) => NetworkStatus::Server {
+                connected_clients: server.clients(),
+                listening_on: server.local_addr,
+            },
+            None => NetworkStatus::Offline,
+        }
+    }
+}
+
+impl From<&ClientApp> for NetworkStatus {
+    fn from(app: &ClientApp) -> Self {
+        NetworkStatus::Client {
+            connected_to: app.client.remote_addr,
+        }
+    }
 }
 
 /// Represents errors the app has no control over.

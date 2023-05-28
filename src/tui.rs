@@ -1,5 +1,7 @@
-use crate::app::{Display, Event};
+use crate::app::NetworkStatus;
+use crate::net::{Event, TimerVisuals};
 use crate::notification;
+use crate::pomodoro::Activity;
 use crossterm::event::{
     Event as CrosstermEvent, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
 };
@@ -71,19 +73,29 @@ impl Tui {
         Ok(())
     }
 
-    pub fn render(&mut self, render_data: &Display) -> Result<(), TuiError> {
+    pub fn render(
+        &mut self,
+        timer_visuals: &TimerVisuals,
+        network_status: &NetworkStatus,
+    ) -> Result<(), TuiError> {
         self.terminal
             .draw(|f| {
-                render::render_ui(f, render_data, self.show_settings, self.show_timer);
+                render::render_ui(
+                    f,
+                    timer_visuals,
+                    network_status,
+                    self.show_settings,
+                    self.show_timer,
+                );
             })
             .map_err(TuiError::Rendering)?;
 
-        if render_data.notify_end_of_activity {
-            // ignore errors for now, perhaps add a log message in the tui in the future
-            let _ = notification::show_desktop_notification("", &render_data.activity.to_string());
-        }
-
         Ok(())
+    }
+
+    pub fn show_notification(&self, new_activity: Activity) {
+        // ignore errors for now, perhaps add a log message in the tui in the future
+        let _ = notification::show_desktop_notification("", &new_activity.to_string());
     }
 
     pub async fn read_event(&mut self) -> Result<Event, TuiError> {
@@ -151,6 +163,7 @@ pub struct EventConversionUndefinedError;
 impl TryFrom<CrosstermEvent> for Event {
     type Error = EventConversionUndefinedError;
 
+    // TODO: accept uppercase chars too
     fn try_from(event: CrosstermEvent) -> Result<Self, Self::Error> {
         match event {
             CrosstermEvent::Key(key_event)

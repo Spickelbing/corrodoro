@@ -9,7 +9,7 @@ mod protocol;
 mod server;
 
 pub use client::Client;
-pub use protocol::{ClientMessage, ServerMessage};
+pub use protocol::{ClientMessage, Event, ServerMessage, TimerVisuals};
 pub use server::Server;
 
 type FramedStream = Framed<TcpStream, LengthDelimitedCodec>;
