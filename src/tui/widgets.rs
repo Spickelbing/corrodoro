@@ -7,6 +7,7 @@ use tui::{
     text::{Span, Spans},
     widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap},
 };
+use unicode_segmentation::UnicodeSegmentation;
 
 pub struct BlockWithLegend<'a> {
     legend: Vec<Spans<'a>>,
@@ -111,7 +112,6 @@ pub struct PomodoroClock<'a> {
 }
 
 impl<'a> PomodoroClock<'a> {
-    #[allow(dead_code)]
     pub fn block(mut self, block: BlockWithLegend<'a>) -> PomodoroClock<'a> {
         self.block = Some(block);
         self
@@ -158,8 +158,15 @@ impl<'a> Widget for PomodoroClock<'a> {
             block.render(area, buf);
         }
 
+        let clock = animation::clock(1.0 - self.progress_percentage);
+        let clock_height = clock.lines().count() as u16;
+        let clock_width = clock
+            .lines()
+            .map(|l| l.graphemes(true).count())
+            .max()
+            .unwrap_or_default() as u16;
+
         let centered_chunk = {
-            let (clock_width, clock_height) = (21, 11); // TODO: make clock dimensions dynamic
             let (left_padding, right_padding);
             {
                 let leftover_width = inner_area.width.saturating_sub(clock_width);
@@ -196,7 +203,16 @@ impl<'a> Widget for PomodoroClock<'a> {
             horizontal_sub_chunks[1]
         };
 
-        Paragraph::new(animation::clock(1.0 - self.progress_percentage))
+        if centered_chunk.height < clock_height || centered_chunk.width < clock_width {
+            InsufficientSpaceWarning::new(
+                (centered_chunk.width, centered_chunk.height),
+                (clock_width, clock_height),
+            )
+            .render(inner_area, buf);
+            return;
+        }
+
+        Paragraph::new(clock)
             .alignment(Alignment::Left)
             .render(centered_chunk, buf);
 
@@ -291,5 +307,36 @@ impl<'a> Widget for Settings<'a> {
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true })
             .render(text_area, buf);
+    }
+}
+
+#[derive(Default)]
+struct InsufficientSpaceWarning {
+    have: (u16, u16),
+    need: (u16, u16),
+}
+
+impl InsufficientSpaceWarning {
+    fn new(have: (u16, u16), need: (u16, u16)) -> Self {
+        InsufficientSpaceWarning { have, need }
+    }
+}
+
+impl Widget for InsufficientSpaceWarning {
+    fn render(self, area: Rect, buf: &mut tui::buffer::Buffer) {
+        let text = format!(
+            "terminal size too small\nhave {}×{}\nneed {}×{}",
+            self.have.0, self.have.1, self.need.0, self.need.1
+        );
+        let top_padding = (area.height / 2).saturating_sub(text.lines().count() as u16 / 2);
+
+        let vertical_center = Layout::default()
+            .constraints([Constraint::Length(top_padding), Constraint::Min(0)])
+            .split(area)[1];
+
+        Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true })
+            .render(vertical_center, buf);
     }
 }
