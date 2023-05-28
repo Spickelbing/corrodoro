@@ -68,8 +68,14 @@ pub fn render_ui(
             (false, false) => (0, 0),
         };
 
+        let direction = if frame.size().width >= frame.size().height * 2 {
+            Direction::Horizontal
+        } else {
+            Direction::Vertical
+        };
+
         let toplevel_chunks = Layout::default()
-            .direction(Direction::Horizontal)
+            .direction(direction)
             .constraints([
                 Constraint::Percentage(settings_pct),
                 Constraint::Percentage(timer_pct),
