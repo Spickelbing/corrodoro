@@ -125,17 +125,19 @@ pub fn render_ui(
                 _ => 0,
             };
 
-        let timer_widget = PomodoroClock::default()
-            .block(define_block(
-                "²timer",
-                vec!["␣ toggle", "↕ adjust", "skip", "reset", "quit"],
-            ))
-            .break_counter_total(4)
-            .break_counter_filled(n_highlighted_indicators)
-            .completed_focus_sessions(timer_visuals.completed_focus_sessions)
-            .duration(timer_visuals.time_remaining)
-            .timer_is_paused(timer_visuals.timer_is_paused)
-            .progress_percentage(timer_visuals.progress_percentage);
+        let timer_widget = PomodoroClock::new(
+            timer_visuals.completed_focus_sessions,
+            n_highlighted_indicators,
+            4,
+            timer_visuals.progress_percentage,
+            timer_visuals.time_remaining,
+            timer_visuals.activity,
+            timer_visuals.timer_is_paused,
+        )
+        .block(define_block(
+            "²timer",
+            vec!["␣ toggle", "↕ adjust", "skip", "reset", "quit"],
+        ));
 
         frame.render_widget(timer_widget, timer_chunk);
     }

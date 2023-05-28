@@ -117,34 +117,25 @@ impl<'a> PomodoroClock<'a> {
         self
     }
 
-    pub fn completed_focus_sessions(mut self, completed_focus_sessions: u32) -> PomodoroClock<'a> {
-        self.completed_focus_sessions = completed_focus_sessions;
-        self
-    }
-
-    pub fn break_counter_filled(mut self, counter_filled: u8) -> PomodoroClock<'a> {
-        self.break_counter_filled = counter_filled;
-        self
-    }
-
-    pub fn break_counter_total(mut self, counter_total: u8) -> PomodoroClock<'a> {
-        self.break_counter_total = counter_total;
-        self
-    }
-
-    pub fn progress_percentage(mut self, progress_percentage: f64) -> PomodoroClock<'a> {
-        self.progress_percentage = progress_percentage.max(0.0).min(1.0);
-        self
-    }
-
-    pub fn duration(mut self, duration: SessionDuration) -> PomodoroClock<'a> {
-        self.duration = duration;
-        self
-    }
-
-    pub fn timer_is_paused(mut self, is_paused: bool) -> PomodoroClock<'a> {
-        self.is_paused = is_paused;
-        self
+    pub fn new(
+        completed_focus_sessions: u32,
+        break_counter_filled: u8,
+        break_counter_total: u8,
+        progress_percentage: f64,
+        duration: SessionDuration,
+        activity: Activity,
+        is_paused: bool,
+    ) -> Self {
+        PomodoroClock {
+            completed_focus_sessions,
+            break_counter_filled,
+            break_counter_total,
+            progress_percentage,
+            duration,
+            activity,
+            is_paused,
+            ..Default::default()
+        }
     }
 }
 
