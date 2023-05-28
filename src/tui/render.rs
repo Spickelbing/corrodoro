@@ -1,12 +1,11 @@
 use crate::app::NetworkStatus;
 use crate::net::TimerVisuals;
-use crate::tui::animation;
-use crate::tui::widgets::{BlockWithLegend, Settings};
+use crate::tui::widgets::{BlockWithLegend, PomodoroClock, Settings};
 use std::io;
 use tui::widgets::BorderType;
 use tui::{
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets, Frame,
@@ -80,136 +79,58 @@ pub fn render_ui(
         (toplevel_chunks[0], toplevel_chunks[1])
     };
 
-    let widget_timer_block = define_block(
-        "²timer",
-        vec!["␣ toggle", "↕ adjust", "skip", "reset", "quit"],
-    );
+    if show_settings {
+        let network_info_text = {
+            match &network_status {
+                NetworkStatus::Offline => "offline".to_string(),
+                NetworkStatus::Server {
+                    connected_clients,
+                    listening_on,
+                } => {
+                    let how_many_clients = match connected_clients.len() {
+                        0 => "no clients".to_string(),
+                        1 => "one client".to_string(),
+                        n => format!("{n} clients"),
+                    };
 
-    let timer_chunk_within_border = widget_timer_block.inner(timer_chunk);
+                    format!(
+                        "listening on port {}\n{how_many_clients} connected",
+                        listening_on.port()
+                    )
+                }
+                NetworkStatus::Client { connected_to } => {
+                    format!("connected to {connected_to}")
+                }
+            }
+        };
 
-    let clock_animation_chunk = {
-        let (clock_width, clock_height) = (21, 11); // TODO: make clock dimensions dynamic
-        let (left_padding, right_padding);
-        {
-            let leftover_width = timer_chunk_within_border.width.saturating_sub(clock_width);
-            left_padding = leftover_width / 2;
-            right_padding = leftover_width.saturating_sub(left_padding);
-        }
-        let (top_padding, bottom_padding);
-        {
-            let leftover_height = timer_chunk_within_border
-                .height
-                .saturating_sub(clock_height);
-            top_padding = leftover_height / 2;
-            bottom_padding = leftover_height.saturating_sub(top_padding);
-        }
-        let vertically_centered_sub_chunk;
-        {
-            let vertical_sub_chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(top_padding),
-                    Constraint::Length(clock_height),
-                    Constraint::Length(bottom_padding),
-                ])
-                .split(timer_chunk_within_border);
-            vertically_centered_sub_chunk = vertical_sub_chunks[1];
-        }
-        let horizontal_sub_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(left_padding),
-                Constraint::Length(clock_width),
-                Constraint::Length(right_padding),
-            ])
-            .split(vertically_centered_sub_chunk);
+        let settings_widget = Settings::default()
+            .network_status(&network_info_text)
+            .block(define_block("¹settings", vec![]));
 
-        horizontal_sub_chunks[1]
-    };
-
-    let widget_clock_animation = {
-        let partial_clock = animation::clock(1.0 - timer_visuals.progress_percentage);
-
-        widgets::Paragraph::new(partial_clock).alignment(Alignment::Left)
-    };
-
-    let clock_text = {
+        frame.render_widget(settings_widget, settings_chunk);
+    }
+    if show_timer {
         let is_fourth_session = timer_visuals.completed_focus_sessions % 4 == 0;
-        let n_highlighted_indicators: usize = timer_visuals.completed_focus_sessions as usize % 4
+        let n_highlighted_indicators = timer_visuals.completed_focus_sessions as u8 % 4
             + match (timer_visuals.activity.is_focus(), is_fourth_session) {
                 (true, _) => 1,
                 (false, true) => 4,
                 _ => 0,
             };
 
-        format!(
-            "{}\n{}\n{} {}",
-            animation::session_counter(n_highlighted_indicators, 4),
-            timer_visuals.time_remaining,
-            timer_visuals.activity,
-            if timer_visuals.timer_is_paused {
-                "⏵"
-            } else {
-                "⏸"
-            }
-        )
-    };
+        let timer_widget = PomodoroClock::default()
+            .block(define_block(
+                "²timer",
+                vec!["␣ toggle", "↕ adjust", "skip", "reset", "quit"],
+            ))
+            .break_counter_total(4)
+            .break_counter_filled(n_highlighted_indicators)
+            .completed_focus_sessions(timer_visuals.completed_focus_sessions)
+            .duration(timer_visuals.time_remaining)
+            .timer_is_paused(timer_visuals.timer_is_paused)
+            .progress_percentage(timer_visuals.progress_percentage);
 
-    let clock_text_chunk = {
-        let text_height = clock_text.lines().count() as u16;
-        let ceil_padding = (clock_animation_chunk.height / 2).saturating_sub(text_height / 2);
-        let floor_padding = clock_animation_chunk
-            .height
-            .saturating_sub(ceil_padding)
-            .saturating_sub(text_height / 2);
-        let vertical_sub_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(ceil_padding),
-                Constraint::Length(text_height),
-                Constraint::Length(floor_padding),
-            ])
-            .split(clock_animation_chunk);
-
-        vertical_sub_chunks[1]
-    };
-
-    let widget_clock_text = widgets::Paragraph::new(clock_text).alignment(Alignment::Center);
-
-    let network_info_text = {
-        match &network_status {
-            NetworkStatus::Offline => "offline".to_string(),
-            NetworkStatus::Server {
-                connected_clients,
-                listening_on,
-            } => {
-                let how_many_clients = match connected_clients.len() {
-                    0 => "no clients".to_string(),
-                    1 => "one client".to_string(),
-                    n => format!("{n} clients"),
-                };
-
-                format!(
-                    "listening on port {}\n{how_many_clients} connected",
-                    listening_on.port()
-                )
-            }
-            NetworkStatus::Client { connected_to } => {
-                format!("connected to {connected_to}")
-            }
-        }
-    };
-
-    let widget_network_info = Settings::default()
-        .status(&network_info_text)
-        .block(define_block("¹settings", vec![]));
-
-    if show_settings {
-        frame.render_widget(widget_network_info, settings_chunk);
-    }
-    if show_timer {
-        frame.render_widget(widget_clock_animation, clock_animation_chunk);
-        frame.render_widget(widget_clock_text, clock_text_chunk);
-        frame.render_widget(widget_timer_block, timer_chunk);
+        frame.render_widget(timer_widget, timer_chunk);
     }
 }

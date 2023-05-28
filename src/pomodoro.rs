@@ -218,7 +218,7 @@ impl Default for Settings {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct SessionDuration(pub Duration);
 
 impl Deref for SessionDuration {
