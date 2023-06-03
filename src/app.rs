@@ -249,7 +249,7 @@ impl From<&App> for TimerVisuals {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum NetworkStatus {
     Offline,
     Server {

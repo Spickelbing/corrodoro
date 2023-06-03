@@ -25,7 +25,7 @@ pub enum Event {
     ReduceActivity(Duration),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct TimerVisuals {
     pub time_remaining: SessionDuration,
     pub timer_is_paused: bool,

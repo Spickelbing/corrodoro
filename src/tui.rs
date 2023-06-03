@@ -22,6 +22,12 @@ pub struct Tui {
     event_stream: EventStream,
     show_settings: bool,
     show_timer: bool,
+    last_display_data: Option<DisplayData>,
+}
+
+struct DisplayData {
+    timer_visuals: TimerVisuals,
+    network_status: NetworkStatus,
 }
 
 impl Tui {
@@ -35,6 +41,7 @@ impl Tui {
             event_stream: EventStream::new(),
             show_settings: true,
             show_timer: true,
+            last_display_data: None,
         })
     }
 
@@ -90,6 +97,11 @@ impl Tui {
             })
             .map_err(TuiError::Rendering)?;
 
+        self.last_display_data = Some(DisplayData {
+            timer_visuals: *timer_visuals,
+            network_status: network_status.clone(),
+        });
+
         Ok(())
     }
 
@@ -103,7 +115,7 @@ impl Tui {
             let crossterm_event = self.read_crossterm_event().await?;
 
             // just slapped in real quick, could do this nicer
-            self.handle_crossterm_event(&crossterm_event);
+            self.handle_crossterm_event(&crossterm_event)?;
 
             if let Ok(event) = Event::try_from(crossterm_event) {
                 return Ok(event);
@@ -120,7 +132,7 @@ impl Tui {
         Ok(event)
     }
 
-    fn handle_crossterm_event(&mut self, event: &CrosstermEvent) {
+    fn handle_crossterm_event(&mut self, event: &CrosstermEvent) -> Result<(), TuiError> {
         match event {
             CrosstermEvent::Key(key_event) if key_event.kind != KeyEventKind::Release => {
                 match key_event.code {
@@ -129,8 +141,16 @@ impl Tui {
                     _ => {}
                 }
             }
+            CrosstermEvent::Resize(_, _) => {
+                if let Some(display_data) = self.last_display_data.take() {
+                    self.render(&display_data.timer_visuals, &display_data.network_status)?;
+                    self.last_display_data = Some(display_data);
+                }
+            }
             _ => {}
         }
+
+        Ok(())
     }
 
     fn toggle_settings(&mut self) {
