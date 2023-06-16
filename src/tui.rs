@@ -1,7 +1,6 @@
 use crate::app::NetworkStatus;
-use crate::net::{Event, TimerVisuals};
 use crate::notification;
-use crate::pomodoro::Activity;
+use crate::protocol::{Event, TimerVisuals};
 use crossterm::event::{
     Event as CrosstermEvent, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
 };
@@ -105,9 +104,9 @@ impl Tui {
         Ok(())
     }
 
-    pub fn show_notification(&self, new_activity: Activity) {
+    pub fn show_notification(&self, msg: &str) {
         // ignore errors for now, perhaps add a log message in the tui in the future
-        let _ = notification::show_desktop_notification("", &new_activity.to_string());
+        let _ = notification::show_desktop_notification("", msg);
     }
 
     pub async fn read_event(&mut self) -> Result<Event, TuiError> {

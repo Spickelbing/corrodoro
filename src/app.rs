@@ -1,5 +1,5 @@
-use crate::net::{Client, ClientMessage, Event, NetworkError, Server, ServerMessage, TimerVisuals};
-use crate::pomodoro::{Activity, State};
+use crate::pomodoro::State;
+use crate::protocol::{Event, NetworkProtocol, TimerVisuals};
 use crate::tui::{Tui, TuiError};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -10,11 +10,12 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::select;
 use tokio::time::{interval, Interval};
+use zwiesel::{Client, ClientError, ClientEvent, Server, ServerError, ServerEvent};
 
 pub struct App {
     pomodoro_state: State,
     tui: Tui,
-    server: Option<Server>,
+    server: Option<Server<NetworkProtocol>>,
 }
 
 impl App {
@@ -28,17 +29,16 @@ impl App {
         })
     }
 
-    pub async fn start_server(&mut self, socket: SocketAddr) -> Result<(), NetworkError> {
-        self.server = Some(Server::bind(socket).await?);
+    pub async fn start_server(&mut self, socket: SocketAddr) -> Result<(), ServerError> {
+        self.server = Some(Server::host(socket).await?);
         Ok(())
     }
 
-    pub async fn stop_server(&mut self) -> Result<(), Vec<NetworkError>> {
+    pub async fn stop_server(&mut self) -> () {
         if let Some(server) = &mut self.server {
             server.disconnect_all();
             self.server = None;
         }
-        Ok(())
     }
 
     pub async fn run(&mut self) -> Result<(), UnrecoverableError> {
@@ -50,30 +50,6 @@ impl App {
         Ok(())
     }
 
-    async fn broadcast_visuals(&mut self, visuals: TimerVisuals) {
-        if let Some(server) = &mut self.server {
-            let maybe_bytes = ServerMessage::Display(visuals).as_bytes();
-            if let Ok(msg) = maybe_bytes {
-                // ignore transmission errors for now
-                let _ = server.broadcast_frame(msg).await;
-            } else {
-                // this should never happen
-            }
-        }
-    }
-
-    async fn broadcast_notify(&mut self, next_activity: Activity) {
-        if let Some(server) = &mut self.server {
-            let maybe_bytes = ServerMessage::Notify(next_activity).as_bytes();
-            if let Ok(msg) = maybe_bytes {
-                // ignore transmission errors for now
-                let _ = server.broadcast_frame(msg).await;
-            } else {
-                // this should never happen
-            }
-        }
-    }
-
     async fn run_inner(&mut self) -> Result<(), UnrecoverableError> {
         let mut pomodoro_clock = interval(Duration::from_millis(100));
         let mut pomodoro_start_time = Instant::now();
@@ -82,7 +58,9 @@ impl App {
             let visuals = TimerVisuals::from(&*self);
             let network_status = NetworkStatus::from(&*self);
             self.tui.render(&visuals, &network_status)?;
-            self.broadcast_visuals(visuals).await;
+            if let Some(server) = &mut self.server {
+                let _ = server.broadcast(&NetworkProtocol::Display(visuals)).await?;
+            }
 
             select! {
                 _ = pomodoro_clock.tick() => {
@@ -94,8 +72,10 @@ impl App {
 
                         let activity_after = self.pomodoro_state.current_activity();
                         if activity_before != activity_after {
-                            self.broadcast_notify(activity_after).await;
-                            self.tui.show_notification(activity_after);
+                            if let Some(server) = &mut self.server {
+                                let _ = server.broadcast(&NetworkProtocol::Notify(activity_after)).await?;
+                            }
+                            self.tui.show_notification(&activity_after.to_string());
                         }
                     }
                 }
@@ -105,24 +85,36 @@ impl App {
                         break;
                     }
                 }
-                client_msg = async {
+                server_event = async {
                     match &mut self.server {
-                        Some(server) => {
-                            match server.recv_frame().await {
-                                Ok(frame) => ClientMessage::from_bytes(frame),
-                                Err(err) => Err(err),
-                            }
-                        }
+                        Some(server) => server.event().await,
                         _ => ForeverPending.await.forever(),
                     }
                 } => {
-                    match client_msg {
-                        Ok(ClientMessage::Event(event)) => {
-                            if *self.handle_event(&event, &mut pomodoro_clock, &mut pomodoro_start_time) {
-                                break;
+                    if let Ok(event) = server_event {
+                        match event {
+                            ServerEvent::NewConnection(client_id) => {
+                                self.tui.show_notification(&format!("Client {client_id} connected"));
+                            }
+                            ServerEvent::Disconnect(client_id, None) => {
+                                self.tui.show_notification(&format!("Client {client_id} disconnected"));
+                            }
+                            ServerEvent::Disconnect(client_id, Some(_)) => {
+                                self.tui.show_notification(&format!("Client {client_id} disconnected because of a network error"));
+                            }
+                            ServerEvent::Message(_, message) => {
+                                match message {
+                                    NetworkProtocol::Event(event) => {
+                                        if *self.handle_event(&event, &mut pomodoro_clock, &mut pomodoro_start_time) {
+                                            break;
+                                        }
+                                    }
+                                    _ => (), // received wrong type of message, ignore for now
+                                }
                             }
                         }
-                        Err(_err) => (), // network error occured, ignore for now
+                    } else {
+                        // ignore network errors for now
                     }
                 }
             }
@@ -174,18 +166,15 @@ impl App {
 
 pub struct ClientApp {
     tui: Tui,
-    client: Client,
+    client: Client<NetworkProtocol>,
 }
 
 impl ClientApp {
     pub async fn connect(addr: SocketAddr) -> Result<Self, UnrecoverableError> {
-        let remote_server = Client::connect(addr).await?;
+        let client = Client::connect(addr).await?;
         let tui = Tui::new()?;
 
-        Ok(Self {
-            tui,
-            client: remote_server,
-        })
+        Ok(Self { tui, client })
     }
 
     pub async fn run(&mut self) -> Result<(), UnrecoverableError> {
@@ -200,24 +189,32 @@ impl ClientApp {
         let network_status = NetworkStatus::from(&*self);
 
         loop {
-            // TODO: what about resize events?
             select! {
                 event = self.tui.read_event() => {
                     let event = event?;
-
                     if let Event::Quit = event {
                         break;
                     }
-
-                    let bytes = ClientMessage::Event(event).as_bytes()?;
-                    self.client.send_frame(bytes).await?;
+                    self.client.send(&NetworkProtocol::Event(event)).await?;
                 }
-                msg = self.client.recv_frame() => {
-                    let msg = msg?;
-                    let msg = ServerMessage::from_bytes(msg)?;
-                    match msg {
-                        ServerMessage::Display(visuals) => self.tui.render(&visuals, &network_status)?,
-                        ServerMessage::Notify(activity) => self.tui.show_notification(activity),
+                event = self.client.event() => {
+                    match event {
+                        Ok(ClientEvent::Message(msg)) => {
+                            match msg {
+                                NetworkProtocol::Display(visuals) => self.tui.render(&visuals, &network_status)?,
+                                NetworkProtocol::Notify(activity) => self.tui.show_notification(&activity.to_string()),
+                                _ => (), // received wrong type of message, ignore for now
+                            }
+                        }
+                        Ok(ClientEvent::Disconnect(None)) => {
+                            return Err(ClientError::ServerDisconnect.into());
+                        }
+                        Ok(ClientEvent::Disconnect(Some(err))) => {
+                            return Err(err.into());
+                        }
+                        Err(err) => {
+                            return Err(err.into());
+                        }
                     }
                 }
             }
@@ -253,7 +250,7 @@ impl From<&App> for TimerVisuals {
 pub enum NetworkStatus {
     Offline,
     Server {
-        connected_clients: Vec<SocketAddr>,
+        connected_clients: Vec<String>,
         listening_on: SocketAddr,
     },
     Client {
@@ -265,7 +262,7 @@ impl From<&App> for NetworkStatus {
     fn from(app: &App) -> Self {
         match &app.server {
             Some(server) => NetworkStatus::Server {
-                connected_clients: server.clients(),
+                connected_clients: server.clients().iter().map(|c| format!("{c}")).collect(),
                 listening_on: server.local_addr,
             },
             None => NetworkStatus::Offline,
@@ -287,7 +284,9 @@ pub enum UnrecoverableError {
     #[error("error while interfacing with the terminal: {0}")]
     Tui(#[from] TuiError),
     #[error("network error: {0}")]
-    Network(#[from] NetworkError),
+    NetworkClient(#[from] ClientError),
+    #[error("network error: {0}")]
+    NetworkServer(#[from] ServerError),
     #[error("failed to resolve hostname")]
     HostHasNoDnsRecords,
     #[error(

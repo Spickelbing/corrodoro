@@ -1,5 +1,5 @@
 use crate::app::NetworkStatus;
-use crate::net::TimerVisuals;
+use crate::protocol::TimerVisuals;
 use crate::tui::widgets::{BlockWithLegend, PomodoroClock, Settings};
 use std::io;
 use tui::widgets::BorderType;

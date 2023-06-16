@@ -6,9 +6,9 @@ use std::process::ExitCode;
 
 mod app;
 mod args;
-mod net;
 mod notification;
 mod pomodoro;
+mod protocol;
 mod tui;
 
 #[tokio::main(flavor = "current_thread")]
