@@ -8,16 +8,17 @@ pub fn show_desktop_notification(title: &str, message: &str) -> Result<(), Notif
         .summary(title)
         .body(message)
         .show()?;
-
-    thread::spawn(move || {
-        // ignore errors, too insignificant for crash
-        let _ = play_notification_sound();
-    });
-
     Ok(())
 }
 
-fn play_notification_sound() -> Result<(), NotificationError> {
+pub fn play_notification_sound() {
+    thread::spawn(move || {
+        // ignore errors, too insignificant for crash
+        let _ = play_notification_sound_sync();
+    });
+}
+
+fn play_notification_sound_sync() -> Result<(), NotificationError> {
     let (_stream, stream_handle) = OutputStream::try_default()?;
     let audio_file = Cursor::new(include_bytes!("../media/notification.wav"));
     let audio = Decoder::new(audio_file)?;

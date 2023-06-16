@@ -75,7 +75,7 @@ impl App {
                             if let Some(server) = &mut self.server {
                                 let _ = server.broadcast(&NetworkProtocol::Notify(activity_after)).await?;
                             }
-                            self.tui.show_notification(&activity_after.to_string());
+                            self.tui.show_notification(&activity_after.to_string(), true);
                         }
                     }
                 }
@@ -94,13 +94,13 @@ impl App {
                     if let Ok(event) = server_event {
                         match event {
                             ServerEvent::NewConnection(client_id) => {
-                                self.tui.show_notification(&format!("Client {client_id} connected"));
+                                self.tui.show_notification(&format!("Client {client_id} connected"), false);
                             }
                             ServerEvent::Disconnect(client_id, None) => {
-                                self.tui.show_notification(&format!("Client {client_id} disconnected"));
+                                self.tui.show_notification(&format!("Client {client_id} disconnected"), false);
                             }
                             ServerEvent::Disconnect(client_id, Some(_)) => {
-                                self.tui.show_notification(&format!("Client {client_id} disconnected because of a network error"));
+                                self.tui.show_notification(&format!("Client {client_id} disconnected because of a network error"), false);
                             }
                             ServerEvent::Message(_, message) => {
                                 match message {
@@ -202,7 +202,7 @@ impl ClientApp {
                         Ok(ClientEvent::Message(msg)) => {
                             match msg {
                                 NetworkProtocol::Display(visuals) => self.tui.render(&visuals, &network_status)?,
-                                NetworkProtocol::Notify(activity) => self.tui.show_notification(&activity.to_string()),
+                                NetworkProtocol::Notify(activity) => self.tui.show_notification(&activity.to_string(), true),
                                 _ => (), // received wrong type of message, ignore for now
                             }
                         }

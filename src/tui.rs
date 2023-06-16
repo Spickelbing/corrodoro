@@ -104,9 +104,12 @@ impl Tui {
         Ok(())
     }
 
-    pub fn show_notification(&self, msg: &str) {
+    pub fn show_notification(&self, msg: &str, audio: bool) {
         // ignore errors for now, perhaps add a log message in the tui in the future
         let _ = notification::show_desktop_notification("", msg);
+        if audio {
+            notification::play_notification_sound();
+        }
     }
 
     pub async fn read_event(&mut self) -> Result<Event, TuiError> {
